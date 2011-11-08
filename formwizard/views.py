@@ -1,21 +1,37 @@
-import re
-
 from django import forms
-from django.shortcuts import redirect
 from django.core.urlresolvers import reverse
 from django.forms import formsets, ValidationError
+from django.shortcuts import redirect
+from django.template.loader import get_template
+from django.template import RequestContext
 from django.views.generic import TemplateView
 from django.utils.datastructures import SortedDict
 from django.utils.decorators import classonlymethod
-
 from formwizard.storage import get_storage
 from formwizard.storage.exceptions import NoFileStorageConfigured
 from formwizard.forms import ManagementForm
+import re
 
 
 def normalize_name(name):
     new = re.sub('(((?<=[a-z])[A-Z])|([A-Z](?![A-Z]|$)))', '_\\1', name)
     return new.lower().strip('_')
+
+
+class Step(unicode):
+    def __init__(self, name, wizard=None):
+        self._wizard = wizard
+        super(Step, self).__init__(name)
+
+    def __new__(cls, name, wizard=None):
+        return unicode(name)
+
+    @property
+    def url(self):
+        if hasattr(self._wizard, 'get_step_url'):
+            return self._wizard.get_step_url(self)
+        return ''
+
 
 class StepsHelper(object):
 
@@ -34,12 +50,12 @@ class StepsHelper(object):
     @property
     def all(self):
         "Returns the names of all steps/forms."
-        return self._wizard.get_form_list().keys()
+        return [Step(s, self._wizard) for s in self._wizard.get_form_list().keys()]
 
     @property
     def count(self):
         "Returns the total number of steps/forms in this the wizard."
-        return len(self.all)
+        return len(self._wizard.get_form_list())
 
     @property
     def current(self):
@@ -47,7 +63,7 @@ class StepsHelper(object):
         Returns the current step. If no current step is stored in the
         storage backend, the first step will be returned.
         """
-        return self._wizard.storage.current_step or self.first
+        return Step(self._wizard.storage.current_step or self.first, self._wizard)
 
     @property
     def first(self):
@@ -62,17 +78,18 @@ class StepsHelper(object):
     @property
     def next(self):
         "Returns the next step."
-        return self._wizard.get_next_step()
+        return Step(self._wizard.get_next_step(), self._wizard)
 
     @property
     def prev(self):
         "Returns the previous step."
-        return self._wizard.get_prev_step()
+        return Step(self._wizard.get_prev_step(), self._wizard)
 
     @property
     def index(self):
         "Returns the index for the current step."
-        return self._wizard.get_step_index()
+
+        return Step(self._wizard.get_step_index(), self._wizard)
 
     @property
     def step0(self):
@@ -88,31 +105,30 @@ class WizardView(TemplateView):
     The WizardView is used to create multi-page forms and handles all the
     storage and validation stuff. The wizard is based on Django's generic
     class based views.
+
+    :param     wizard_template: Template to render for ``wizard.as_html``
+                                (default: ``console/includes/tab_wizard.html``)
+    :type      wizard_template: unicode
     """
     storage_name = None
-    form_list = None
+    form_list = ()
     initial_dict = None
     instance_dict = None
     condition_dict = None
     template_name = 'formwizard/wizard_form.html'
+    wizard_template_name = 'formwizard/wizard_form.html'
 
     def __repr__(self):
         return '<%s: forms: %s>' % (self.__class__.__name__, self.form_list)
 
     @classonlymethod
-    def as_view(cls, *args, **kwargs):
+    def as_view(cls, form_list=None, initial_dict=None, instance_dict=None,
+                condition_dict=None, *args, **kwargs):
         """
         This method is used within urls.py to create unique formwizard
         instances for every request. We need to override this method because
         we add some kwargs which are needed to make the formwizard usable.
-        """
-        initkwargs = cls.get_initkwargs(*args, **kwargs)
-        return super(WizardView, cls).as_view(**initkwargs)
 
-    @classmethod
-    def get_initkwargs(cls, form_list, initial_dict=None,
-        instance_dict=None, condition_dict=None, *args, **kwargs):
-        """
         Creates a dict with all needed parameters for the form wizard instances.
 
         * `form_list` - is a list of forms. The list entries can be single form
@@ -133,27 +149,28 @@ class WizardView(TemplateView):
           will be called with the formwizard instance as the only argument.
           If the return value is true, the step's form will be used.
         """
-        kwargs.update({
-            'initial_dict': initial_dict or {},
-            'instance_dict': instance_dict or {},
-            'condition_dict': condition_dict or {},
-        })
-        init_form_list = SortedDict()
-
+        form_list = form_list or cls.form_list
         assert len(form_list) > 0, 'at least one form is needed'
+
+        kwargs.update({
+            'initial_dict': initial_dict or cls.initial_dict or {},
+            'instance_dict': instance_dict or cls.instance_dict or {},
+            'condition_dict': condition_dict or cls.condition_dict or {},
+        })
+        form_dict = SortedDict()
 
         # walk through the passed form list
         for i, form in enumerate(form_list):
             if isinstance(form, (list, tuple)):
                 # if the element is a tuple, add the tuple to the new created
                 # sorted dictionary.
-                init_form_list[unicode(form[0])] = form[1]
+                form_dict[unicode(form[0])] = form[1]
             else:
                 # if not, add the form with a zero based counter as unicode
-                init_form_list[unicode(i)] = form
+                form_dict[unicode(i)] = form
 
         # walk through the ne created list of forms
-        for form in init_form_list.itervalues():
+        for form in form_dict.itervalues():
             if issubclass(form, formsets.BaseFormSet):
                 # if the element is based on BaseFormSet (FormSet/ModelFormSet)
                 # we need to override the form variable.
@@ -166,15 +183,12 @@ class WizardView(TemplateView):
                     raise NoFileStorageConfigured
 
         # build the kwargs for the formwizard instances
-        kwargs['form_list'] = init_form_list
-        return kwargs
+        kwargs['form_list'] = form_dict
+        return super(WizardView, cls).as_view(*args, **kwargs)
 
-    def get_wizard_name(self):
-        return normalize_name(self.__class__.__name__)
-
-    def get_prefix(self):
+    def get_prefix(self, request, *args, **kwargs):
         # TODO: Add some kind of unique id to prefix
-        return self.wizard_name
+        return normalize_name(self.__class__.__name__)
 
     def get_form_list(self):
         """
@@ -187,17 +201,17 @@ class WizardView(TemplateView):
         The form_list is always generated on the fly because condition methods
         could use data from other (maybe previous forms).
         """
-        form_list = SortedDict()
-        for form_key, form_class in self.form_list.iteritems():
+        filtered = SortedDict()
+        for step_name, form in self.form_list.iteritems():
             # try to fetch the value from condition list, by default, the form
             # gets passed to the new list.
-            condition = self.condition_dict.get(form_key, True)
+            condition = self.condition_dict.get(step_name, True)
             if callable(condition):
                 # call the value if needed, passes the current instance.
                 condition = condition(self)
             if condition:
-                form_list[form_key] = form_class
-        return form_list
+                filtered[step_name] = form
+        return filtered
 
     def dispatch(self, request, *args, **kwargs):
         """
@@ -210,8 +224,7 @@ class WizardView(TemplateView):
         response gets updated by the storage engine (for example add cookies).
         """
         # add the storage engine to the current formwizard instance
-        self.wizard_name = self.get_wizard_name()
-        self.prefix = self.get_prefix()
+        self.prefix = self.get_prefix(request, *args, **kwargs)
         self.storage = get_storage(self.storage_name, self.prefix, request,
             getattr(self, 'file_storage', None))
         self.steps = StepsHelper(self)
@@ -246,9 +259,9 @@ class WizardView(TemplateView):
         # Look for a wizard_prev_step element in the posted data which
         # contains a valid step name. If one was found, render the requested
         # form. (This makes stepping back a lot easier).
-        wizard_prev_step = self.request.POST.get('wizard_prev_step', None)
-        if wizard_prev_step and wizard_prev_step in self.get_form_list():
-            self.storage.current_step = wizard_prev_step
+        wizard_next_step = self.request.POST.get('wizard_next_step', None)
+        if wizard_next_step and wizard_next_step in self.get_form_list():
+            self.storage.current_step = wizard_next_step
             form = self.get_form(
                 data=self.storage.get_step_data(self.steps.current),
                 files=self.storage.get_step_files(self.steps.current))
@@ -505,7 +518,6 @@ class WizardView(TemplateView):
         context variables are:
 
          * all extra data stored in the storage backend
-         * `form` - form instance of the current step
          * `wizard` - the wizard instance itself
 
         Example:
@@ -527,8 +539,16 @@ class WizardView(TemplateView):
             'management_form': ManagementForm(prefix=self.prefix, initial={
                 'current_step': self.steps.current,
             }),
+            'as_html': lambda: self.get_wizard_html(RequestContext(self.request, context))
         }
         return context
+
+    def get_wizard_template_name(self):
+        return self.wizard_template_name
+
+    def get_wizard_html(self, context):
+        template = get_template(self.get_wizard_template_name())
+        return template.render(context)
 
     def render(self, form=None, **kwargs):
         """
@@ -565,27 +585,8 @@ class NamedUrlWizardView(WizardView):
     """
     A WizardView with URL named steps support.
     """
-    url_name = None
-    done_step_name = None
-
-    @classmethod
-    def get_initkwargs(cls, *args, **kwargs):
-        """
-        We require a url_name to reverse URLs later. Additionally users can
-        pass a done_step_name to change the URL name of the "done" view.
-        """
-        assert 'url_name' in kwargs, 'URL name is needed to resolve correct wizard URLs'
-        extra_kwargs = {
-            'done_step_name': kwargs.pop('done_step_name', 'done'),
-            'url_name': kwargs.pop('url_name'),
-        }
-
-        initkwargs = super(NamedUrlWizardView, cls).get_initkwargs(*args, **kwargs)
-        initkwargs.update(extra_kwargs)
-
-        assert initkwargs['done_step_name'] not in initkwargs['form_list'], \
-            'step name "%s" is reserved for "done" view' % initkwargs['done_step_name']
-        return initkwargs
+    wizard_step_url_name = None
+    wizard_done_step_name = None
 
     def get(self, *args, **kwargs):
         """
@@ -600,13 +601,11 @@ class NamedUrlWizardView(WizardView):
                 query_string = "?%s" % self.request.GET.urlencode()
             else:
                 query_string = ""
-            next_step_url = reverse(self.url_name, kwargs={
-                'step': self.steps.current,
-            }) + query_string
-            return redirect(next_step_url)
+            return redirect(self.get_step_url(self.steps.current)
+                            + query_string)
 
         # is the current step the "done" name/view?
-        elif step_url == self.done_step_name:
+        elif step_url == self.wizard_done_step_name:
             last_step = self.steps.last
             return self.render_done(self.get_form(step=last_step,
                 data=self.storage.get_step_data(last_step),
@@ -632,17 +631,17 @@ class NamedUrlWizardView(WizardView):
         # invalid step name, reset to first and redirect.
         else:
             self.storage.current_step = self.steps.first
-            return redirect(self.url_name, step=self.steps.first)
+            return redirect(self.get_step_url(self.steps.first))
 
     def post(self, *args, **kwargs):
         """
         Do a redirect if user presses the prev. step button. The rest of this
         is super'd from FormWizard.
         """
-        prev_step = self.request.POST.get('wizard_prev_step', None)
-        if prev_step and prev_step in self.get_form_list():
-            self.storage.current_step = prev_step
-            return redirect(self.url_name, step=prev_step)
+        next_step = self.request.POST.get('wizard_next_step', None)
+        if next_step and next_step in self.get_form_list():
+            self.storage.current_step = next_step
+            return redirect(self.get_step_url(next_step))
         return super(NamedUrlWizardView, self).post(*args, **kwargs)
 
     def render_next_step(self, form, **kwargs):
@@ -652,7 +651,10 @@ class NamedUrlWizardView(WizardView):
         """
         next_step = self.get_next_step()
         self.storage.current_step = next_step
-        return redirect(self.url_name, step=next_step)
+        return redirect(self.get_step_url(next_step))
+
+    def get_step_url(self, step):
+        return reverse(self.wizard_step_url_name, kwargs={'step': step})
 
     def render_revalidation_failure(self, failed_step, form, **kwargs):
         """
@@ -660,15 +662,15 @@ class NamedUrlWizardView(WizardView):
         step.
         """
         self.storage.current_step = failed_step
-        return redirect(self.url_name, step=failed_step)
+        return redirect(self.get_step_url(failed_step))
 
     def render_done(self, form, **kwargs):
         """
         When rendering the done view, we have to redirect first (if the URL
         name doesn't fit).
         """
-        if kwargs.get('step', None) != self.done_step_name:
-            return redirect(self.url_name, step=self.done_step_name)
+        if kwargs.get('step', None) != self.wizard_done_step_name:
+            return redirect(self.get_step_url(self.wizard_done_step_name))
         return super(NamedUrlWizardView, self).render_done(form, **kwargs)
 
 
