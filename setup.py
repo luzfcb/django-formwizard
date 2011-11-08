@@ -6,7 +6,7 @@ def read(fname):
 
 setup(
     name='django-formwizard',
-    version='1.0',
+    version='1.1.dev',
     description='A FormWizard for Django with multiple storage backends',
     long_description=read("README.rst"),
     author='Stephan Jaekel',
