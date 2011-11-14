@@ -1,19 +1,22 @@
-from formwizard import storage
+from formwizard.storage import Storage
+from django.core.exceptions import ImproperlyConfigured
 
 
-class SessionStorage(storage.BaseStorage):
+class SessionStorage(Storage):
+    """
+    A storage backend for form wizards that stores data into the user's
+    session.
+    """
+    def process_request(self, request):
+        if not hasattr(request, 'session'):
+            raise ImproperlyConfigured("Session middleware must be enabled to "
+                                       "use %s" % self.__class__.__name__)
+        self._session = request.session
+        data = self._session.get(self._prefix)
+        if data is None:
+            data = {'current_step': None, 'steps': {}}
+        self.decode(data)
 
-    def __init__(self, *args, **kwargs):
-        super(SessionStorage, self).__init__(*args, **kwargs)
-        if self.prefix not in self.request.session:
-            self.init_data()
-
-    def _get_data(self):
-        self.request.session.modified = True
-        return self.request.session[self.prefix]
-
-    def _set_data(self, value):
-        self.request.session[self.prefix] = value
-        self.request.session.modified = True
-
-    data = property(_get_data, _set_data)
+    def process_response(self, response):
+        self._session.setdefault(self._prefix, {}).update(self.encode())
+        self._session.modified = True

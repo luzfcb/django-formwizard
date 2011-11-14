@@ -1,98 +1,158 @@
+from __future__ import absolute_import, unicode_literals
 from django.core.files.uploadedfile import UploadedFile
 from django.utils.encoding import smart_str
-
-try:
-    from django.utils.functional import lazy_property
-except ImportError:
-    from formwizard.compat import lazy_property
-
 from formwizard.storage.exceptions import NoFileStorageConfigured
 
 
-class BaseStorage(object):
-    step_key = 'step'
-    step_data_key = 'step_data'
-    step_files_key = 'step_files'
-    extra_data_key = 'extra_data'
+class Step(object):
+    """
+    A single step in the wizard.
 
-    def __init__(self, prefix, request=None, file_storage=None):
-        self.prefix = 'wizard_%s' % prefix
-        self.request = request
-        self.file_storage = file_storage
+    :param  name: name of step
+    :type   name: ``unicode``
+    :param  data: form data
+    :type   data: ``{"<field name>": "<raw value>", ...}``
+    :param files: form files
+    :type  files: ``{"<field name>": <UploadedFile object>, ...}``
+    """
+    # TODO: finish above docstring
+    def __init__(self, name, data=None, files=None):
+        self.name = name
+        self.data = data or {}
+        self.files = files or {}
 
-    def init_data(self):
-        self.data = {
-            self.step_key: None,
-            self.step_data_key: {},
-            self.step_files_key: {},
-            self.extra_data_key: {},
-        }
+
+class Storage(object):
+    step_class = Step
+
+    def __init__(self, prefix, file_storage):
+        self._prefix = prefix
+        self._file_storage = file_storage
+        self.steps = {}
+        self.current_step = None
+
+    def process_request(self, request):
+        """
+        Performs any required functions when the request is made available.
+        Typically this is used to populate ``self.steps``
+        """
+        pass
+
+    def process_response(self, response):
+        """
+        Makes any changes to the response that are required by the storage
+        (e.g. adding cookies)
+        """
+        pass
 
     def reset(self):
-        self.init_data()
+        """
+        Reset the storage for the current wizard back to a clean initial state.
+        """
+        self.steps = {}
+        self.current_step = None
 
-    def _get_current_step(self):
-        return self.data[self.step_key]
+    def __getitem__(self, name):
+        """
+        Returns the step with the given name.
+        """
+        if name not in self.steps:
+            self.steps[name] = self.step_class(name)
+        return self.steps[name]
 
-    def _set_current_step(self, step):
-        self.data[self.step_key] = step
+    def _decode_files(self, files):
+        """
+        Helper method that when given *files* -- a ``dict`` with the
+        structure::
 
-    current_step = lazy_property(_get_current_step, _set_current_step)
-
-    def _get_extra_data(self):
-        return self.data[self.extra_data_key] or {}
-
-    def _set_extra_data(self, extra_data):
-        self.data[self.extra_data_key] = extra_data
-
-    extra_data = lazy_property(_get_extra_data, _set_extra_data)
-
-    def get_step_data(self, step):
-        return self.data[self.step_data_key].get(step, None)
-
-    def set_step_data(self, step, cleaned_data):
-        self.data[self.step_data_key][step] = cleaned_data
-
-    @property
-    def current_step_data(self):
-        return self.get_step_data(self.current_step)
-
-    def get_step_files(self, step):
-        wizard_files = self.data[self.step_files_key].get(step, {})
-
-        if wizard_files and not self.file_storage:
-            raise NoFileStorageConfigured
-
-        files = {}
-        for field, field_dict in wizard_files.iteritems():
-            field_dict = dict((smart_str(k), v)
-                              for k, v in field_dict.iteritems())
-            tmp_name = field_dict.pop('tmp_name')
-            files[field] = UploadedFile(
-                file=self.file_storage.open(tmp_name), **field_dict)
-        return files or None
-
-    def set_step_files(self, step, files):
-        if files and not self.file_storage:
-            raise NoFileStorageConfigured
-
-        if step not in self.data[self.step_files_key]:
-            self.data[self.step_files_key][step] = {}
-
-        for field, field_file in (files or {}).iteritems():
-            tmp_filename = self.file_storage.save(field_file.name, field_file)
-            file_dict = {
-                'tmp_name': tmp_filename,
-                'name': field_file.name,
-                'content_type': field_file.content_type,
-                'size': field_file.size,
-                'charset': field_file.charset
+            {
+                "<field_name>": {
+                    "file_storage_key": "<unicode>",
+                    "name": "<unicode>",
+                    "content_type": "<unicode>",
+                    "size": "<int>",
+                    "charset": "<unicode>",
+                },
+                ...
             }
-            self.data[self.step_files_key][step][field] = file_dict
 
-    @property
-    def current_step_files(self):
-        return self.get_step_files(self.current_step)
+        a new ``dict`` it returned with the structure::
 
-    def update_response(self, response):
-        pass
+            {
+                "<field_name>": <UploadedFile object>,
+                ...
+            }
+
+        """
+        decoded = {}
+        for name, data in files.iteritems():
+            key = data.pop('file_storage_key')
+            uploaded_file = UploadedFile(file=self._file_storage.open(key),
+                                         **data)
+            # In order to ensure that files aren't repeatedly saved to the file
+            # storage, the filename of each file in the file storage is added
+            # to ``UploadedFile`` objects as a ``_wizard_file_storage_key``
+            # attribute when they're decoded. This acts as a marker to indicate
+            # that the file already exists in the file storage.
+            uploaded_file._wizard_file_storage_key = key
+            files[name] = uploaded_file
+        return decoded
+
+    def _encode_files(self, files):
+        """
+        Performs the opposite conversion to ``_decode_files()``.
+        """
+        if files and not self._file_storage:
+            raise NoFileStorageConfigured
+        encoded = {}
+        for name, uploadedfile in files.iteritems():
+            key = getattr(uploadedfile, '_wizard_file_storage_key', None)
+            if key is None:
+                key = self._file_storage.save(uploadedfile.name, uploadedfile)
+            encoded[name] = {
+                'file_storage_key': key,
+                'name': uploadedfile.name,
+                'content_type': uploadedfile.content_type,
+                'size': uploadedfile.size,
+                'charset': uploadedfile.charset
+            }
+        return encoded
+
+    def encode(self):
+        """
+        Encodes the current wizard state to a ``dict``::
+
+            {
+                "current_step": "<name>",
+                "steps": {
+                    "<name>": {
+                        "files": { ... },
+                        "data": {"<fieldname>": "<rawfieldvalue>", ... },
+                    },
+                    ...
+                }
+            }
+
+        See ``_encode_files()`` for the structure of each step's *files*.
+        """
+        current = self.current_step
+        data = {
+            'current_step': None if current is None else current.name,
+            'steps': {},
+        }
+        for step in self.steps.itervalues():
+            data['steps'][step.name] = {
+                'files': self._encode_files(step.files),
+                'data': step.data,
+            }
+        return data
+
+    def decode(self, data):
+        """
+        Performs reverse operation to ``encode()``.
+        """
+        self.current_step = data['current_step']
+        for name, data in data['steps'].iteritems():
+            self.steps[name] = self.step_class(
+                    step_name, data=data['data'],
+                    files=self._decode_files[data['files']])
