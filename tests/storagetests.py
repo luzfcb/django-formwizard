@@ -1,5 +1,4 @@
 from datetime import datetime
-
 from django.http import HttpRequest
 from django.conf import settings
 from django.contrib.auth.models import User

@@ -1,21 +1,17 @@
+from __future__ import absolute_import, unicode_literals
 from django.utils.importlib import import_module
-
-from formwizard.storage.base import BaseStorage
+from formwizard.storage.base import Storage, Step
 from formwizard.storage.exceptions import (MissingStorageModule,
     MissingStorageClass, NoFileStorageConfigured)
 
 
-def get_storage(path, *args, **kwargs):
-    i = path.rfind('.')
-    module, attr = path[:i], path[i+1:]
+def get_storage(path):
+    module, _, attr = path.rpartition('.')
     try:
-        mod = import_module(module)
+        return getattr(import_module(module), attr)
     except ImportError, e:
-        raise MissingStorageModule(
-            'Error loading storage %s: "%s"' % (module, e))
-    try:
-        storage_class = getattr(mod, attr)
+        raise MissingStorageModule('Error loading storage %s: "%s"'
+                                   % (module, e))
     except AttributeError:
-        raise MissingStorageClass(
-            'Module "%s" does not define a storage named "%s"' % (module, attr))
-    return storage_class(*args, **kwargs)
+        raise MissingStorageClass('Module "%s" does not define a storage named'
+                                  ' "%s"' % (module, attr))

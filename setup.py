@@ -2,20 +2,23 @@ from os.path import abspath, dirname, join
 from setuptools import setup, find_packages
 
 
-def read(path):
-    return open(join(dirname(abspath(__file__)), path)).read()
-
-
 setup(
     name='django-formwizard',
     version='1.1.dev',
     description='A FormWizard for Django with multiple storage backends',
-    long_description=read("README.rst"),
+    long_description=open("README.rst").read(),
     author='Stephan Jaekel',
     author_email='steph@rdev.info',
-    url='http://github.com/stephrdev/django-formwizard/',
-    packages=find_packages(exclude=['test_project', 'test_project.*']),
+    url='http://github.com/bradleyayers/django-formwizard/',
+    packages=find_packages(exclude=['tests', 'tests.*',
+                                    'test_project', 'test_project.*']),
     include_package_data=True,  # declarations in MANIFEST.in
+
+    install_requires=['Django >=1.3'],
+    tests_require=['Django >=1.3', 'Attest >=0.5', 'django-attest'],
+
+    test_loader='attest:FancyReporter.test_loader',
+    test_suite='tests.everything',
 
     classifiers=[
         'Development Status :: 4 - Beta',

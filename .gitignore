@@ -1,3 +1,6 @@
 local_database.db
 *.komodoproject
 *.pyc
+/.env
+/dist
+/*.egg-info
