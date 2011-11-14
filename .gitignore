@@ -1,4 +1,5 @@
-local_database.db
+.DS_Store
+/reports
 *.komodoproject
 *.pyc
 /.env
