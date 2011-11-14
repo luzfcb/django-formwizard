@@ -22,7 +22,8 @@ junit = Tests()
 @junit.test
 def make_junit_output():
     import xmlrunner
-    xmlrunner.XMLTestRunner(output='reports').run(everything.test_suite())
+    runner = xmlrunner.XMLTestRunner(output=b"reports")
+    runner.run(everything.test_suite())
 
 
 # -----------------------------------------------------------------------------
@@ -35,6 +36,8 @@ def make_pylint_output():
     from os.path import expanduser
     from pylint.lint import Run
     from pylint.reporters.text import ParseableTextReporter
+    if not os.path.exists('reports'):
+        os.mkdir('reports')
     with open('reports/pylint.txt', 'wb') as handle:
-        args = os.environ['PACKAGES'].split()
+        args = ['formwizard', 'tests', 'test_project']
         Run(args, reporter=ParseableTextReporter(output=handle), exit=False)
