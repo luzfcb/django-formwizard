@@ -38,6 +38,6 @@ def make_pylint_output():
     from pylint.reporters.text import ParseableTextReporter
     if not os.path.exists('reports'):
         os.mkdir('reports')
-    with open('reports/pylint.txt', 'wb') as handle:
+    with open('reports/pylint.report', 'wb') as handle:
         args = ['formwizard', 'tests', 'test_project']
         Run(args, reporter=ParseableTextReporter(output=handle), exit=False)
