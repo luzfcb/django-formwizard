@@ -35,19 +35,6 @@ class Step3(forms.Form):
     data = forms.CharField()
 
 
-#class CustomKwargsStep1(Step1):
-#    def __init__(self, test=None, *args, **kwargs):
-#        self.test = test
-#        return super(CustomKwargsStep1, self).__init__(*args, **kwargs)
-#
-#
-#class UserForm(forms.ModelForm):
-#    class Meta:
-#        model = User
-#
-#UserFormSet = forms.models.modelformset_factory(User, form=UserForm, extra=2)
-
-
 class DispatchHookMixin(object):
     """
     A view mixin that causes the view instance to be returned from
