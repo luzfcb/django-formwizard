@@ -504,9 +504,7 @@ class NamedUrlWizardMixin(WizardMixin):
         elif step_name in self.form_list:
             step = self.storage[step_name]
             self.storage.current_step = step
-            form = self.get_form(step)
-            import pdb; pdb.set_trace()
-            return self.render(form)
+            return self.render(self.get_form(step))
 
         # invalid step name, reset to first and redirect.
         else:
