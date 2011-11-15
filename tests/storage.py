@@ -49,6 +49,22 @@ def should_encode_and_decode_properly():
     restored.decode(storage.encode())
     assert storage.encode() == restored.encode()
 
+    step = storage['step1']
+    step.files = {}
+    step.data = {}
+    assert storage.encode() == {
+        'current_step': 'step1',
+        'steps': {
+            'step1': {
+                'files': {},
+                'data': {},
+            },
+        }
+    }
+    restored.decode(storage.encode())
+    assert storage.encode() == restored.encode()
+
+
 session = Tests()
 
 
@@ -113,7 +129,7 @@ def reset_should_clear_data():
     storage = CookieStorage('prefix')
     storage.steps = {'step1': Step('step1')}
 
-    expected = '{"current_step":null,"steps":{"step1":{"files":{},"data":{}}}}'
+    expected = '{"current_step":null,"steps":{"step1":{"files":null,"data":null}}}'
     assert storage.encode() == '%s$%s' % (storage.hmac(expected), expected)
 
     storage.reset()

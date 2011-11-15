@@ -18,8 +18,8 @@ class Step(object):
     # TODO: finish above docstring
     def __init__(self, name, data=None, files=None):
         self.name = name
-        self.data = data or {}
-        self.files = files or {}
+        self.data = data
+        self.files = files
 
 
 class Storage(object):
@@ -84,6 +84,8 @@ class Storage(object):
             }
 
         """
+        if files is None:
+            return None
         decoded = {}
         for name, data in files.iteritems():
             key = data.pop('file_storage_key')
@@ -102,6 +104,8 @@ class Storage(object):
         """
         Performs the opposite conversion to ``_decode_files()``.
         """
+        if files is None:
+            return None
         if files and not self._file_storage:
             raise NoFileStorageConfigured
         encoded = {}

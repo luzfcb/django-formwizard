@@ -333,8 +333,8 @@ class WizardMixin(object):
         arguments, e.g. a form that requires the HTTP request.
         """
         kwargs = {
-            'data': step.data or None,
-            'files': step.files or None,
+            'data': step.data,
+            'files': step.files,
             'prefix': self.get_form_prefix(step, self.form_list[step.name]),
             'initial': self.get_form_initial(step),
         }
@@ -446,8 +446,12 @@ class WizardMixin(object):
         Gets called when a form doesn't validate when rendering the done
         view. By default, it changed the current step to failing forms step
         and renders the form.
+
+        :param step: the step that failed validation
+        :type  step: ``Step`` object
+        :param form: the form that failed validation
+        :type  form: ``Form`` or ``FormSet`` object
         """
-        step.data = step.data or {}  # forces errors to be displayed on the form
         self.storage.current_step = step
         return self.render(form)
 
@@ -500,7 +504,9 @@ class NamedUrlWizardMixin(WizardMixin):
         elif step_name in self.form_list:
             step = self.storage[step_name]
             self.storage.current_step = step
-            return self.render(self.get_form(step))
+            form = self.get_form(step)
+            import pdb; pdb.set_trace()
+            return self.render(form)
 
         # invalid step name, reset to first and redirect.
         else:
@@ -554,13 +560,14 @@ class NamedUrlWizardMixin(WizardMixin):
         self.storage.current_step = next_step
         return redirect(next_step.url)
 
-    def render_revalidation_failure(self, failed_step, form):
+    def render_revalidation_failure(self, step, form):
         """
         When a step fails, we have to redirect the user to the first failing
         step.
         """
-        self.storage.current_step = failed_step
-        return redirect(failed_step.url)
+        step.data = step.data or {}
+        self.storage.current_step = step
+        return redirect(step.url)
 
 
 class NamedUrlSessionWizardView(NamedUrlWizardMixin, TemplateView):

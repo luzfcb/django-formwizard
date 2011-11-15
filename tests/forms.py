@@ -253,7 +253,7 @@ formsets = Tests()
 
 
 @formsets.test
-def should_honor_extras_correctly():
+def should_honor_extra_forms_correctly():
     Step1Formset = formset_factory(Step1, extra=3)
 
     class TestWizardView(DispatchHookMixin, CookieWizardView):
@@ -270,14 +270,14 @@ def should_honor_extras_correctly():
     assert len(formset.forms) == 3
 
     # Now add some data for the first form
-    step.data.update({
+    step.data = {
         '0-0-name': 'Brad',
         '0-1-name': '',
         '0-2-name': '',
         '0-TOTAL_FORMS': 3,
         '0-INITIAL_FORMS': 0,
         '0-MAX_NUM_FORMS': '',
-    })
+    }
     formset = instance.get_form(step)
     assert len(formset.forms) == 3
 
