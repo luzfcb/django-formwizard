@@ -403,7 +403,7 @@ class WizardMixin(object):
 
     # -- views ----------------------------------------------------------------
 
-    def render(self, form=None, **kwargs):
+    def render(self, form=None, *args, **kwargs):
         """
         Returns a ``HttpResponse`` containing a all needed context data.
         """
@@ -425,8 +425,8 @@ class WizardMixin(object):
             step = self.storage[step_name]
             form = self.get_form(step=step)
             if not form.is_valid():
-                return self.render_revalidation_failure(step, form, *args,
-                                                        **kwargs)
+                return self.render_revalidation_failure(
+                        step, form, *args, **kwargs)
             validated_forms.append(form)
 
         # render the done view and reset the wizard before returning the
@@ -442,17 +442,17 @@ class WizardMixin(object):
         view. By default, it changed the current step to failing forms step
         and renders the form.
         """
-        step.data = {}  # forces errors to be displayed on the form
+        step.data = step.data or {}  # forces errors to be displayed on the form
         self.storage.current_step = step
-        return self.render(form, **kwargs)
+        return self.render(form, *args, **kwargs)
 
-    def render_next_step(self, **kwargs):
+    def render_next_step(self, *args, **kwargs):
         """
         When using the NamedUrlFormWizard, we have to redirect to update the
         browser's URL to match the shown step.
         """
         self.storage.current_step = self.steps.next
-        return self.render()
+        return self.render(*args, **kwargs)
 
 
 class SessionWizardView(WizardMixin, TemplateView):
@@ -495,7 +495,7 @@ class NamedUrlWizardMixin(WizardMixin):
         elif step_name in self.form_list:
             step = self.storage[step_name]
             self.storage.current_step = step
-            return self.render(self.get_form(step), **kwargs)
+            return self.render(self.get_form(step), *args, **kwargs)
 
         # invalid step name, reset to first and redirect.
         else:
@@ -538,8 +538,8 @@ class NamedUrlWizardMixin(WizardMixin):
         """
         if kwargs.get('step', None) != self.wizard_done_step_name:
             return redirect(self.get_step_url(self.wizard_done_step_name))
-        return super(NamedUrlWizardMixin, self).render_done(form, *args,
-                                                            **kwargs)
+        return super(NamedUrlWizardMixin, self).render_done(
+                form, *args, **kwargs)
 
     def render_next_step(self, form, **kwargs):
         """

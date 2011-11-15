@@ -57,6 +57,8 @@ class Storage(object):
         Returns the step with the given name.
         """
         if name not in self.steps:
+            print 'Creating step "%r"' % name
+            import pdb; pdb.set_trace()
             self.steps[name] = self.step_class(name)
         return self.steps[name]
 
@@ -151,11 +153,14 @@ class Storage(object):
         """
         Performs reverse operation to ``encode()``.
         """
+        for name, attrs in data['steps'].iteritems():
+            self.steps[name] = self.step_class(
+                    name, data=attrs['data'],
+                    files=self._decode_files(attrs['files']))
+        # It's important to set the current step *after* creating all the Step
+        # objects, so that ``self.current_step`` refers to an object in
+        # ``self.steps``
         if data['current_step'] is None:
             self.current_step = None
         else:
             self.current_step = self[data['current_step']]
-        for name, data in data['steps'].iteritems():
-            self.steps[name] = self.step_class(
-                    name, data=data['data'],
-                    files=self._decode_files(data['files']))
