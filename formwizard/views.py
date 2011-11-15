@@ -563,7 +563,15 @@ class NamedUrlWizardMixin(WizardMixin):
         When a step fails, we have to redirect the user to the first failing
         step.
         """
-        step.data = step.data or {}
+        if step.data is None:
+            step.data = {}
+            # if it's a formset, we need to create a plain management form to
+            # use as the step data, otherwise we'll get "ManagementForm data is
+            # missing or has been tampered with" error
+            if isinstance(form, formsets.BaseFormSet):
+                management_form = form.management_form
+                for key, value in management_form.initial.iteritems():
+                    step.data[management_form.add_prefix(key)] = value
         self.storage.current_step = step
         return redirect(step.url)
 
