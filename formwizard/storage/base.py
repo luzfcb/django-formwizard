@@ -57,8 +57,6 @@ class Storage(object):
         Returns the step with the given name.
         """
         if name not in self.steps:
-            print 'Creating step "%r"' % name
-            import pdb; pdb.set_trace()
             self.steps[name] = self.step_class(name)
         return self.steps[name]
 
