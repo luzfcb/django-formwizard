@@ -184,7 +184,7 @@ class WizardMixin(object):
         kwargs['form_list'] = form_dict
         return super(WizardMixin, cls).as_view(*args, **kwargs)
 
-    def get_prefix(self, request, *args, **kwargs):
+    def get_prefix(self):
         # TODO: Add some kind of unique id to prefix
         return normalize_name(self.__class__.__name__)
 
@@ -224,8 +224,14 @@ class WizardMixin(object):
         After processing the request using the ``dispatch`` method, the
         response gets updated by the storage engine (for example add cookies).
         """
+        # View.dispatch() does this too, but we're doing some initialisation
+        # before that's called, so we'll save these here.
+        self.request = request
+        self.args = args
+        self.kwargs = kwargs
+        # other stuff to init
         self.steps = StepsHelper(self)
-        self.prefix = self.get_prefix(request, *args, **kwargs)
+        self.prefix = self.get_prefix()
         self.storage = self.get_storage()
         self.storage.process_request(request)
         response = super(WizardMixin, self).dispatch(request, *args, **kwargs)
@@ -247,7 +253,7 @@ class WizardMixin(object):
         self.storage.current_step = step
         return self.render(self.get_form(step))
 
-    def post(self, *args, **kwargs):
+    def post(self, request, *args, **kwargs):
         """
         This method handles POST requests.
 
@@ -282,9 +288,9 @@ class WizardMixin(object):
             step.data = form.data
             self.files = form.files
             if step == self.steps.last:
-                return self.render_done(form, *args, **kwargs)
+                return self.render_done(form)
             else:
-                return self.render_next_step(*args, **kwargs)
+                return self.render_next_step()
         return self.render(form)
 
     def get_form_prefix(self, step, form):
@@ -327,8 +333,8 @@ class WizardMixin(object):
         arguments, e.g. a form that requires the HTTP request.
         """
         kwargs = {
-            'data': step.data or None,
-            'files': step.files or None,
+            'data': step.data,
+            'files': step.files,
             'prefix': self.get_form_prefix(step, self.form_list[step.name]),
             'initial': self.get_form_initial(step),
         }
@@ -352,9 +358,11 @@ class WizardMixin(object):
         form_kwargs = self.get_form_kwargs(step)
         form_kwargs.update(kwargs)
         form_class = self.form_list[step.name]
-        return form_class(**form_kwargs)
+        form = form_class(**form_kwargs)
+        form.is_valid()  # trigger validation
+        return form
 
-    def get_context_data(self, form, *args, **kwargs):
+    def get_context_data(self, form, **kwargs):
         """
         Returns the template context for a step. You can overwrite this method
         to add more data for all or some steps. This method returns a
@@ -366,15 +374,15 @@ class WizardMixin(object):
         Example::
 
             class MyWizard(SessionWizardView):
-                def get_context_data(self, form, *args, **kwargs):
-                    context = super(MyWizard, self).get_context_data(form,
-                            *args, **kwargs)
+                def get_context_data(self, form, **kwargs):
+                    context = super(MyWizard, self).get_context_data(
+                            form, **kwargs)
                     if self.steps.current.name == 'my_step_name':
                         context.update({'another_var': True})
                     return context
 
         """
-        context = super(WizardMixin, self).get_context_data(*args, **kwargs)
+        context = super(WizardMixin, self).get_context_data(**kwargs)
         context['wizard'] = {
             'form': form,
             'steps': self.steps,
@@ -393,7 +401,7 @@ class WizardMixin(object):
         template = get_template(self.get_wizard_template_name())
         return template.render(context)
 
-    def done(self, form_list, **kwargs):
+    def done(self, form_list):
         """
         This method muss be overrided by a subclass to process to form data
         after processing all steps.
@@ -403,15 +411,15 @@ class WizardMixin(object):
 
     # -- views ----------------------------------------------------------------
 
-    def render(self, form=None, **kwargs):
+    def render(self, form=None):
         """
         Returns a ``HttpResponse`` containing a all needed context data.
         """
         form = form or self.get_form()
-        context = self.get_context_data(form, **kwargs)
+        context = self.get_context_data(form=form)
         return self.render_to_response(context)
 
-    def render_done(self, *args, **kwargs):
+    def render_done(self):
         """
         This method gets called when all forms passed. The method should also
         re-validate all steps to prevent manipulation. If any form don't
@@ -425,27 +433,31 @@ class WizardMixin(object):
             step = self.storage[step_name]
             form = self.get_form(step=step)
             if not form.is_valid():
-                return self.render_revalidation_failure(step, form, *args,
-                                                        **kwargs)
+                return self.render_revalidation_failure(step, form)
             validated_forms.append(form)
 
         # render the done view and reset the wizard before returning the
         # response. This is needed to prevent from rendering done with the
         # same data twice.
-        response = self.done(validated_forms, *args, **kwargs)
+        response = self.done(validated_forms)
         self.storage.reset()
         return response
 
-    def render_revalidation_failure(self, step, form, **kwargs):
+    def render_revalidation_failure(self, step, form):
         """
         Gets called when a form doesn't validate when rendering the done
         view. By default, it changed the current step to failing forms step
         and renders the form.
+
+        :param step: the step that failed validation
+        :type  step: ``Step`` object
+        :param form: the form that failed validation
+        :type  form: ``Form`` or ``FormSet`` object
         """
         self.storage.current_step = step
-        return self.render(form, **kwargs)
+        return self.render(form)
 
-    def render_next_step(self, **kwargs):
+    def render_next_step(self):
         """
         When using the NamedUrlFormWizard, we have to redirect to update the
         browser's URL to match the shown step.
@@ -475,44 +487,43 @@ class NamedUrlWizardMixin(WizardMixin):
     wizard_step_url_name = None
     wizard_done_step_name = None
 
-    def get(self, *args, **kwargs):
+    def get(self, request, *args, **kwargs):
         """
         This renders the form or, if needed, does the HTTP redirects.
         """
         step_name = kwargs.get('step', None)
         if step_name is None:
-            if self.request.GET:
-                query_string = "?%s" % self.request.GET.urlencode()
+            if request.GET:
+                query_string = "?%s" % request.GET.urlencode()
             else:
                 query_string = ""
             return redirect(self.steps.current.url + query_string)
 
         # is the current step the "done" name/view?
         elif step_name == self.wizard_done_step_name:
-            last_step = self.steps.last
-            return self.render_done(*args, **kwargs)
+            return self.render_done()
 
         elif step_name in self.form_list:
             step = self.storage[step_name]
             self.storage.current_step = step
-            return self.render(self.get_form(step), **kwargs)
+            return self.render(self.get_form(step))
 
         # invalid step name, reset to first and redirect.
         else:
             self.storage.current_step = self.steps.first
             return redirect(self.steps.first.url)
 
-    def post(self, *args, **kwargs):
+    def post(self, request, *args, **kwargs):
         """
         Do a redirect if user presses the prev. step button. The rest of this
         is super'd from FormWizard.
         """
-        next_step_name = self.request.POST.get('wizard_next_step')
+        next_step_name = request.POST.get('wizard_next_step')
         if next_step_name and next_step_name in self.get_form_list():
             next_step = self.storage[next_step_name]
             self.storage.current_step = next_step
             return redirect(next_step.url)
-        return super(NamedUrlWizardMixin, self).post(*args, **kwargs)
+        return super(NamedUrlWizardMixin, self).post(request, *args, **kwargs)
 
     def get_step_url(self, step_name):
         return reverse(self.wizard_step_url_name, kwargs={'step': step_name})
@@ -531,17 +542,31 @@ class NamedUrlWizardMixin(WizardMixin):
 
     # -- views ----------------------------------------------------------------
 
-    def render_done(self, form, *args, **kwargs):
+    def render_done(self):
         """
         When rendering the done view, we have to redirect first (if the URL
         name doesn't fit).
         """
-        if kwargs.get('step', None) != self.wizard_done_step_name:
+        # for any steps that don't have any form data, change it to a suitable
+        # default
+        # TODO: clean-up this, does it need to go in WizardMixin?
+        for step_name, form_class in self.get_form_list().iteritems():
+            step = self.storage[step_name]
+            if step.data is None:
+                step.data = {}
+                # if it's a formset, we need to create a plain management form
+                # to use as the step data, otherwise we'll get "ManagementForm
+                # data is missing or has been tampered with" error
+                if issubclass(form_class, formsets.BaseFormSet):
+                    management_form = self.get_form(step, data=None).management_form
+                    for key, value in management_form.initial.iteritems():
+                        step.data[management_form.add_prefix(key)] = value
+        # Make sure we're on the right page.
+        if self.kwargs.get('step', None) != self.wizard_done_step_name:
             return redirect(self.get_step_url(self.wizard_done_step_name))
-        return super(NamedUrlWizardMixin, self).render_done(form, *args,
-                                                            **kwargs)
+        return super(NamedUrlWizardMixin, self).render_done()
 
-    def render_next_step(self, form, **kwargs):
+    def render_next_step(self):
         """
         When using the NamedUrlFormWizard, we have to redirect to update the
         browser's URL to match the shown step.
@@ -550,13 +575,13 @@ class NamedUrlWizardMixin(WizardMixin):
         self.storage.current_step = next_step
         return redirect(next_step.url)
 
-    def render_revalidation_failure(self, failed_step, form, **kwargs):
+    def render_revalidation_failure(self, step, form):
         """
         When a step fails, we have to redirect the user to the first failing
         step.
         """
-        self.storage.current_step = failed_step
-        return redirect(failed_step.url)
+        self.storage.current_step = step
+        return redirect(step.url)
 
 
 class NamedUrlSessionWizardView(NamedUrlWizardMixin, TemplateView):

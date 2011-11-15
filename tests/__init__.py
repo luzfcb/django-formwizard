@@ -6,12 +6,12 @@ os.environ['DJANGO_SETTINGS_MODULE'] = 'tests.app.settings'
 from attest import Tests
 from django.test.simple import DjangoTestSuiteRunner
 from .forms import tests as form_tests
-from .backends import tests as backend_tests
+from .storage import tests as storage_tests
 
 
 runner = DjangoTestSuiteRunner()
 runner.setup_databases()
-everything = Tests([backend_tests, form_tests])
+everything = Tests((form_tests, storage_tests))
 
 
 # -----------------------------------------------------------------------------
@@ -38,6 +38,6 @@ def make_pylint_output():
     from pylint.reporters.text import ParseableTextReporter
     if not os.path.exists('reports'):
         os.mkdir('reports')
-    with open('reports/pylint.txt', 'wb') as handle:
+    with open('reports/pylint.report', 'wb') as handle:
         args = ['formwizard', 'tests', 'test_project']
         Run(args, reporter=ParseableTextReporter(output=handle), exit=False)

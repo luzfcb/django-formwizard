@@ -18,14 +18,14 @@ class Step(object):
     # TODO: finish above docstring
     def __init__(self, name, data=None, files=None):
         self.name = name
-        self.data = data or {}
-        self.files = files or {}
+        self.data = data
+        self.files = files
 
 
 class Storage(object):
     step_class = Step
 
-    def __init__(self, prefix, file_storage):
+    def __init__(self, prefix, file_storage=None):
         self._prefix = prefix
         self._file_storage = file_storage
         self.steps = {}
@@ -84,6 +84,8 @@ class Storage(object):
             }
 
         """
+        if files is None:
+            return None
         decoded = {}
         for name, data in files.iteritems():
             key = data.pop('file_storage_key')
@@ -102,6 +104,8 @@ class Storage(object):
         """
         Performs the opposite conversion to ``_decode_files()``.
         """
+        if files is None:
+            return None
         if files and not self._file_storage:
             raise NoFileStorageConfigured
         encoded = {}
@@ -151,8 +155,14 @@ class Storage(object):
         """
         Performs reverse operation to ``encode()``.
         """
-        self.current_step = data['current_step']
-        for name, data in data['steps'].iteritems():
+        for name, attrs in data['steps'].iteritems():
             self.steps[name] = self.step_class(
-                    step_name, data=data['data'],
-                    files=self._decode_files[data['files']])
+                    name, data=attrs['data'],
+                    files=self._decode_files(attrs['files']))
+        # It's important to set the current step *after* creating all the Step
+        # objects, so that ``self.current_step`` refers to an object in
+        # ``self.steps``
+        if data['current_step'] is None:
+            self.current_step = None
+        else:
+            self.current_step = self[data['current_step']]

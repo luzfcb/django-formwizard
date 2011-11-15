@@ -1,0 +1,38 @@
+from django.core.exceptions import ImproperlyConfigured
+from django.utils import simplejson as json
+from formwizard.storage import Storage
+from formwizard.models import WizardState
+
+
+class DatabaseStorage(Storage):
+    encoder = json.JSONEncoder(separators=(',', ':'))
+
+    def process_request(self, request):
+        kwargs = {'pk': self._prefix}
+        # Either session or authentication information is used to scope the
+        # wizard state. This is implicit with using CookieStorage or
+        # SesssionStorage, but it must be done explicitly here. Preferably the
+        # User is used, but fallback to the session key is supported
+        try:
+            assert request.user.is_authenticated()
+            kwargs['user'] = request.user
+        except (AssertionError, AttributeError):
+            if not hasattr(request, 'session'):
+                raise ImproperlyConfigured(
+                        '%s requires that the sessions middleware is enabled.'
+                        % self.__class__.__name__)
+            kwargs['session_key'] = request.session.session_key
+
+        self._state, created = WizardState.objects.get_or_create(**kwargs)
+        self.decode(self._state.data)
+
+    def process_response(self, response):
+        self._state.data = self.encode()
+        self._state.full_clean()
+        self._state.save()
+
+    def encode(self):
+        return self.encoder.encode(super(DatabaseStorage, self).encode())
+
+    def decode(self, data):
+        return json.loads(data)

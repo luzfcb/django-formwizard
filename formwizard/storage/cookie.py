@@ -1,26 +1,32 @@
+from __future__ import absolute_import, unicode_literals
 from django.conf import settings
 from django.core.exceptions import SuspiciousOperation
 from django.utils import simplejson as json
 from django.utils.hashcompat import sha_constructor
+from django.utils.encoding import smart_str
 from formwizard.storage import Storage
 import hmac
 
 
 class CookieStorage(Storage):
+    # explicitly specifying the separators removes extraneous whitespace in the
+    # JSON output
     encoder = json.JSONEncoder(separators=(',', ':'))
 
     def process_request(self, request):
-        self.decode(request.COOKIES.get(self._prefix, ''))
+        key = self._prefix.encode('utf-8')
+        self.decode(request.COOKIES.get(key, ''))
 
     def process_response(self, response):
         if self.steps or self.current_step:
-            response.set_cookie(self._prefix, self.encode())
+            key = self._prefix.encode('utf-8')
+            response.set_cookie(key, self.encode())
 
     def decode(self, data):
         # check integrity
-        hash, _, payload = data.partition('$')
+        hmac, _, payload = data.partition('$')
         if payload:
-            if hash != self.hash(payload):
+            if hmac != self.hmac(payload):
                 raise SuspiciousOperation('Form wizard cookie manipulated')
             decoded = json.loads(payload, cls=json.JSONDecoder)
         else:
@@ -30,8 +36,9 @@ class CookieStorage(Storage):
     def encode(self):
         data = super(CookieStorage, self).encode()
         payload = self.encoder.encode(data)
-        return '%s$%s' % (self.hash(payload), payload)
+        return '%s$%s' % (self.hmac(payload), payload)
 
-    def hash(self, data):
-        return hmac.new('%s$%s' % (settings.SECRET_KEY, self._prefix),
-                        data, sha_constructor).hexdigest()
+    def hmac(self, data):
+        key = smart_str('%s$%s' % (settings.SECRET_KEY, self._prefix))
+        msg = smart_str(data)
+        return hmac.new(key, msg, sha_constructor).hexdigest()
