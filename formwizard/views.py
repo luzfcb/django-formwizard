@@ -358,7 +358,9 @@ class WizardMixin(object):
         form_kwargs = self.get_form_kwargs(step)
         form_kwargs.update(kwargs)
         form_class = self.form_list[step.name]
-        return form_class(**form_kwargs)
+        form = form_class(**form_kwargs)
+        form.is_valid()  # trigger validation
+        return form
 
     def get_context_data(self, form, **kwargs):
         """
@@ -545,6 +547,21 @@ class NamedUrlWizardMixin(WizardMixin):
         When rendering the done view, we have to redirect first (if the URL
         name doesn't fit).
         """
+        # for any steps that don't have any form data, change it to a suitable
+        # default
+        # TODO: clean-up this, does it need to go in WizardMixin?
+        for step_name, form_class in self.get_form_list().iteritems():
+            step = self.storage[step_name]
+            if step.data is None:
+                step.data = {}
+                # if it's a formset, we need to create a plain management form
+                # to use as the step data, otherwise we'll get "ManagementForm
+                # data is missing or has been tampered with" error
+                if issubclass(form_class, formsets.BaseFormSet):
+                    management_form = self.get_form(step, data=None).management_form
+                    for key, value in management_form.initial.iteritems():
+                        step.data[management_form.add_prefix(key)] = value
+        # Make sure we're on the right page.
         if self.kwargs.get('step', None) != self.wizard_done_step_name:
             return redirect(self.get_step_url(self.wizard_done_step_name))
         return super(NamedUrlWizardMixin, self).render_done()
@@ -563,15 +580,6 @@ class NamedUrlWizardMixin(WizardMixin):
         When a step fails, we have to redirect the user to the first failing
         step.
         """
-        if step.data is None:
-            step.data = {}
-            # if it's a formset, we need to create a plain management form to
-            # use as the step data, otherwise we'll get "ManagementForm data is
-            # missing or has been tampered with" error
-            if isinstance(form, formsets.BaseFormSet):
-                management_form = form.management_form
-                for key, value in management_form.initial.iteritems():
-                    step.data[management_form.add_prefix(key)] = value
         self.storage.current_step = step
         return redirect(step.url)
 

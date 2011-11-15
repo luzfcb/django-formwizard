@@ -5,7 +5,8 @@ from django.http import HttpRequest
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.sessions.middleware import SessionMiddleware
-from django.forms.formsets import formset_factory
+from django.core.exceptions import ValidationError
+from django.forms.formsets import formset_factory, BaseFormSet
 from django.forms.models import modelformset_factory
 from django.db import models
 from django.db.models.query import QuerySet
@@ -280,6 +281,31 @@ def should_honor_extra_forms_correctly():
     }
     formset = instance.get_form(step)
     assert len(formset.forms) == 3
+
+
+@formsets.test
+def formsets_should_be_validated():
+    class BorkedFormset(BaseFormSet):
+        def clean(self):
+            raise ValidationError("Expected error")
+
+    Step1BorkedFormset = formset_factory(Step1, BorkedFormset)
+
+    class TestWizardView(DispatchHookMixin, CookieWizardView):
+        form_list = (
+            Step1BorkedFormset,
+        )
+
+    view = TestWizardView.as_view()
+    request = factory.get('/')
+    instance = view(request)
+    step = instance.storage['0']
+    assert not instance.get_form(step).non_form_errors()
+
+    # Add some data so the form is bound then we should get non_form_errors
+    step.data = {'0-TOTAL_FORMS': '1', '0-INITIAL_FORMS': 0,
+                 '0-MAX_NUM_FORMS': ''}
+    assert instance.get_form(step).non_form_errors() == ['Expected error']
 
 
 tests = Tests((as_view, formsets, steps))
