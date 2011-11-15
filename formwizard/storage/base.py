@@ -25,7 +25,7 @@ class Step(object):
 class Storage(object):
     step_class = Step
 
-    def __init__(self, prefix, file_storage):
+    def __init__(self, prefix, file_storage=None):
         self._prefix = prefix
         self._file_storage = file_storage
         self.steps = {}
@@ -151,8 +151,11 @@ class Storage(object):
         """
         Performs reverse operation to ``encode()``.
         """
-        self.current_step = data['current_step']
+        if data['current_step'] is None:
+            self.current_step = None
+        else:
+            self.current_step = self[data['current_step']]
         for name, data in data['steps'].iteritems():
             self.steps[name] = self.step_class(
-                    step_name, data=data['data'],
-                    files=self._decode_files[data['files']])
+                    name, data=data['data'],
+                    files=self._decode_files(data['files']))

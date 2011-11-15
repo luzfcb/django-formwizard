@@ -442,6 +442,7 @@ class WizardMixin(object):
         view. By default, it changed the current step to failing forms step
         and renders the form.
         """
+        step.data = {}  # forces errors to be displayed on the form
         self.storage.current_step = step
         return self.render(form, **kwargs)
 
@@ -489,7 +490,6 @@ class NamedUrlWizardMixin(WizardMixin):
 
         # is the current step the "done" name/view?
         elif step_name == self.wizard_done_step_name:
-            last_step = self.steps.last
             return self.render_done(*args, **kwargs)
 
         elif step_name in self.form_list:

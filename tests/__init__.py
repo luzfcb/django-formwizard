@@ -6,12 +6,12 @@ os.environ['DJANGO_SETTINGS_MODULE'] = 'tests.app.settings'
 from attest import Tests
 from django.test.simple import DjangoTestSuiteRunner
 from .forms import tests as form_tests
-from .backends import tests as backend_tests
+from .storage import tests as storage_tests
 
 
 runner = DjangoTestSuiteRunner()
 runner.setup_databases()
-everything = Tests([backend_tests, form_tests])
+everything = Tests((form_tests, storage_tests))
 
 
 # -----------------------------------------------------------------------------
