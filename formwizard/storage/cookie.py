@@ -9,18 +9,23 @@ import hmac
 
 
 class CookieStorage(Storage):
-    # explicitly specifying the separators removes extraneous whitespace in the
-    # JSON output
+    """
+    A storage that stores form data in a cookie given to the user. Files remain
+    stored in the provided file storage.
+    """
+    # explicitly specifying the separators removes extraneous JSON whitespace
     encoder = json.JSONEncoder(separators=(',', ':'))
 
+    def __init__(self, *args, **kwargs):
+        super(CookieStorage, self).__init__(*args, **kwargs)
+        self.key = ('%s|%s' % (self.namespace, self.name)).encode('utf-8')
+
     def process_request(self, request):
-        key = self._prefix.encode('utf-8')
-        self.decode(request.COOKIES.get(key, ''))
+        self.decode(request.COOKIES.get(self.key, ''))
 
     def process_response(self, response):
         if self.steps or self.current_step:
-            key = self._prefix.encode('utf-8')
-            response.set_cookie(key, self.encode())
+            response.set_cookie(self.key, self.encode())
 
     def decode(self, data):
         # check integrity
@@ -39,6 +44,6 @@ class CookieStorage(Storage):
         return '%s$%s' % (self.hmac(payload), payload)
 
     def hmac(self, data):
-        key = smart_str('%s$%s' % (settings.SECRET_KEY, self._prefix))
-        msg = smart_str(data)
+        key = b'%s$%s' % (settings.SECRET_KEY, self.key)
+        msg = data.encode('utf-8')
         return hmac.new(key, msg, sha_constructor).hexdigest()

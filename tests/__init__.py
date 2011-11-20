@@ -4,14 +4,16 @@ import os
 os.environ['DJANGO_SETTINGS_MODULE'] = 'tests.app.settings'
 
 from attest import Tests
-from django.test.simple import DjangoTestSuiteRunner
+from django_attest import FancyReporter
 from .forms import tests as form_tests
+from .namedurlwizard import tests as namedurlwizard_tests
 from .storage import tests as storage_tests
+from .wizard import tests as wizard_tests
 
 
-runner = DjangoTestSuiteRunner()
-runner.setup_databases()
-everything = Tests((form_tests, storage_tests))
+loader = FancyReporter.test_loader
+everything = Tests((form_tests, namedurlwizard_tests, storage_tests,
+                    wizard_tests))
 
 
 # -----------------------------------------------------------------------------

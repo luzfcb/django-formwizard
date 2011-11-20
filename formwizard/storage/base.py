@@ -15,7 +15,6 @@ class Step(object):
     :param files: form files
     :type  files: ``{"<field name>": <UploadedFile object>, ...}``
     """
-    # TODO: finish above docstring
     def __init__(self, name, data=None, files=None):
         self.name = name
         self.data = data
@@ -23,11 +22,31 @@ class Step(object):
 
 
 class Storage(object):
+    """
+    Base class for all wizard storages.
+
+    A *storage* is the mechanism that allows state of the wizard to be stored
+    across multiple HTTP requests. Information required to acomplish this
+    is the *current step* and the raw data and files for each form in the
+    wizard.
+
+    :param         name: A unique identifier within context of *namespace*.
+                         Used to differentiate state betwen different instances
+                         of the same wizard.
+    :type          name: ``unicode``
+    :param    namespace: A unique identifier for each wizard.
+    :type     namespace: ``unicode``
+    :param file_storage: Django file storage backend used to store form files.
+                         If omitted, this storage will refuse to store forms
+                         that include file fields.
+    :type  file_storage: ``django.core.files.Storage`` class
+    """
     step_class = Step
 
-    def __init__(self, prefix, file_storage=None):
-        self._prefix = prefix
-        self._file_storage = file_storage
+    def __init__(self, name, namespace, file_storage=None):
+        self.name = name
+        self.namespace = namespace
+        self.file_storage = file_storage
         self.steps = {}
         self.current_step = None
 
@@ -89,7 +108,7 @@ class Storage(object):
         decoded = {}
         for name, data in files.iteritems():
             key = data.pop('file_storage_key')
-            uploaded_file = UploadedFile(file=self._file_storage.open(key),
+            uploaded_file = UploadedFile(file=self.file_storage.open(key),
                                          **data)
             # In order to ensure that files aren't repeatedly saved to the file
             # storage, the filename of each file in the file storage is added
@@ -97,7 +116,7 @@ class Storage(object):
             # attribute when they're decoded. This acts as a marker to indicate
             # that the file already exists in the file storage.
             uploaded_file._wizard_file_storage_key = key
-            files[name] = uploaded_file
+            decoded[name] = uploaded_file
         return decoded
 
     def _encode_files(self, files):
@@ -106,13 +125,13 @@ class Storage(object):
         """
         if files is None:
             return None
-        if files and not self._file_storage:
+        if files and not self.file_storage:
             raise NoFileStorageConfigured
         encoded = {}
         for name, uploadedfile in files.iteritems():
             key = getattr(uploadedfile, '_wizard_file_storage_key', None)
             if key is None:
-                key = self._file_storage.save(uploadedfile.name, uploadedfile)
+                key = self.file_storage.save(uploadedfile.name, uploadedfile)
             encoded[name] = {
                 'file_storage_key': key,
                 'name': uploadedfile.name,

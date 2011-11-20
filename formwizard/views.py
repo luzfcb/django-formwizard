@@ -1,7 +1,10 @@
+from __future__ import absolute_import, unicode_literals
 from django import forms
-from django.core.urlresolvers import reverse
+from django.core.exceptions import ImproperlyConfigured
+from django.core.urlresolvers import reverse, resolve
 from django.forms import formsets, ValidationError
 from django.forms.models import ModelForm, BaseModelFormSet
+from django.http import Http404
 from django.shortcuts import redirect
 from django.template.loader import get_template
 from django.template import RequestContext
@@ -87,16 +90,15 @@ class StepsHelper(object):
 
     @property
     def index(self):
-        "Returns the index for the current step."
+        """Returns the index for the current step (0-based)."""
         return self._wizard.get_form_list().keyOrder.index(self.current.name)
 
-    @property
-    def step0(self):
-        return int(self.index)
+    index0 = index
 
     @property
-    def step1(self):
-        return int(self.index) + 1
+    def index1(self):
+        """Returns thei ndex for the current step (1-based)."""
+        return int(self.index0) + 1
 
 
 class WizardMixin(object):
@@ -184,10 +186,6 @@ class WizardMixin(object):
         kwargs['form_list'] = form_dict
         return super(WizardMixin, cls).as_view(*args, **kwargs)
 
-    def get_prefix(self):
-        # TODO: Add some kind of unique id to prefix
-        return normalize_name(self.__class__.__name__)
-
     def get_form_list(self):
         """
         This method returns a form_list based on the initial form list but
@@ -211,9 +209,23 @@ class WizardMixin(object):
                 filtered[step_name] = form_class
         return filtered
 
+    def get_name(self):
+        return 'default'
+
+    def get_namespace(self):
+        return '%s.%s' % (self.__class__.__module__, self.__class__.__name__)
+
+    def get_prefix(self):
+        return '%s|%s' % (self.get_namespace(), self.get_name())
+
     def get_storage(self):
+        if self.storage_name is None:
+            raise ImproperlyConfigured("%s.storage_name is not specified."
+                                       % self.__class__.__name__)
         storage_class = get_storage(self.storage_name)
-        return storage_class(self.prefix, self.file_storage)
+        return storage_class(name=self.name,
+                             namespace=self.namespace,
+                             file_storage=self.file_storage)
 
     def dispatch(self, request, *args, **kwargs):
         """
@@ -226,12 +238,12 @@ class WizardMixin(object):
         """
         # View.dispatch() does this too, but we're doing some initialisation
         # before that's called, so we'll save these here.
-        self.request = request
-        self.args = args
-        self.kwargs = kwargs
+        self.request, self.args, self.kwargs = request, args, kwargs
         # other stuff to init
-        self.steps = StepsHelper(self)
+        self.name = self.get_name()
+        self.namespace = self.get_namespace()
         self.prefix = self.get_prefix()
+        self.steps = StepsHelper(self)
         self.storage = self.get_storage()
         self.storage.process_request(request)
         response = super(WizardMixin, self).dispatch(request, *args, **kwargs)
@@ -286,9 +298,9 @@ class WizardMixin(object):
         if form.is_valid():
             # Update step with valid data
             step.data = form.data
-            self.files = form.files
+            step.files = form.files
             if step == self.steps.last:
-                return self.render_done(form)
+                return self.render_done()
             else:
                 return self.render_next_step()
         return self.render(form)
@@ -306,7 +318,7 @@ class WizardMixin(object):
         If no step is given, the form_prefix will determine the current step
         automatically.
         """
-        return step.name
+        return '%s-%s' % (self.prefix, step.name)
 
     def get_form_initial(self, step):
         """
@@ -401,7 +413,9 @@ class WizardMixin(object):
         template = get_template(self.get_wizard_template_name())
         return template.render(context)
 
-    def done(self, form_list):
+    # -- views ----------------------------------------------------------------
+
+    def done(self, forms):
         """
         This method muss be overrided by a subclass to process to form data
         after processing all steps.
@@ -409,13 +423,12 @@ class WizardMixin(object):
         raise NotImplementedError("Your %s class has not defined a done() "
             "method, which is required." % self.__class__.__name__)
 
-    # -- views ----------------------------------------------------------------
 
     def render(self, form=None):
         """
         Returns a ``HttpResponse`` containing a all needed context data.
         """
-        form = form or self.get_form()
+        form = form or self.get_form(step=self.steps.current)
         context = self.get_context_data(form=form)
         return self.render_to_response(context)
 
@@ -427,14 +440,14 @@ class WizardMixin(object):
 
         If everything is fine call ``done``.
         """
-        validated_forms = []
+        validated_forms = SortedDict()
         # walk through the form list and try to validate the data again.
         for step_name in self.get_form_list():
             step = self.storage[step_name]
             form = self.get_form(step=step)
             if not form.is_valid():
                 return self.render_revalidation_failure(step, form)
-            validated_forms.append(form)
+            validated_forms[step_name] = form
 
         # render the done view and reset the wizard before returning the
         # response. This is needed to prevent from rendering done with the
@@ -466,25 +479,17 @@ class WizardMixin(object):
         return self.render()
 
 
-class SessionWizardView(WizardMixin, TemplateView):
+class WizardView(WizardMixin, TemplateView):
     """
-    A WizardView with pre-configured SessionStorage backend.
+    A view premixed with ``WizardMixin`` and ``TemplateView``. To use this a
+    *storage* must be specified.
     """
-    storage_name = 'formwizard.storage.session.SessionStorage'
-
-
-class CookieWizardView(WizardMixin, TemplateView):
-    """
-    A WizardView with pre-configured CookieStorage backend.
-    """
-    storage_name = 'formwizard.storage.cookie.CookieStorage'
 
 
 class NamedUrlWizardMixin(WizardMixin):
     """
     A WizardView with URL named steps support.
     """
-    wizard_step_url_name = None
     wizard_done_step_name = None
 
     def get(self, request, *args, **kwargs):
@@ -526,7 +531,20 @@ class NamedUrlWizardMixin(WizardMixin):
         return super(NamedUrlWizardMixin, self).post(request, *args, **kwargs)
 
     def get_step_url(self, step_name):
-        return reverse(self.wizard_step_url_name, kwargs={'step': step_name})
+        match = getattr(self, '_step_url_match', None)
+        if not match:
+            try:
+                self._step_url_match = match = resolve(self.request.path)
+            except Http404:
+                raise ImproperlyConfigured(
+                        "Unable to automatically determine wizard URL pattern."
+                        " %s.get_step_url() must be implemented."
+                        % self.__class__.__name__)
+        kwargs = dict(match.kwargs)
+        kwargs['step'] = step_name
+        url_name = ':'.join((match.namespaces + [match.url_name]))
+        return reverse(url_name, args=match.args, kwargs=kwargs,
+                       current_app=match.app_name)
 
     def get_storage(self):
         wizard = self
@@ -584,15 +602,8 @@ class NamedUrlWizardMixin(WizardMixin):
         return redirect(step.url)
 
 
-class NamedUrlSessionWizardView(NamedUrlWizardMixin, TemplateView):
+class NamedUrlWizardView(NamedUrlWizardMixin, TemplateView):
     """
-    A NamedUrlWizardView with pre-configured SessionStorage backend.
+    A view premixed with ``NamedUrlWizardMixin`` and ``TemplateView``. To use
+    this a *storage* must be specified.
     """
-    storage_name = 'formwizard.storage.session.SessionStorage'
-
-
-class NamedUrlCookieWizardView(NamedUrlWizardMixin, TemplateView):
-    """
-    A NamedUrlFormWizard with pre-configured CookieStorageBackend.
-    """
-    storage_name = 'formwizard.storage.cookie.CookieStorage'

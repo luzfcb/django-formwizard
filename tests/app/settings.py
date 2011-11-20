@@ -15,4 +15,4 @@ INSTALLED_APPS = [
 
 SECRET_KEY = 'abcdefghiljklmnopqrstuvwxyz'
 
-ROOT_URLCONF = 'tests.app.urls',
+ROOT_URLCONF = 'tests.app.urls'

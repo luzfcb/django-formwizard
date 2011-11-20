@@ -16,7 +16,7 @@ from django.template.response import TemplateResponse
 from django.utils.importlib import import_module
 from django.views.generic.base import TemplateView
 from django.utils.datastructures import SortedDict
-from formwizard.views import (CookieWizardView, SessionWizardView, WizardMixin)
+from formwizard.views import WizardView
 from .app.models import Person
 
 
@@ -39,7 +39,7 @@ class Step3(forms.Form):
 class DispatchHookMixin(object):
     """
     A view mixin that causes the view instance to be returned from
-    ``dispatch()``. This allows ``as_view()`` in generic views to be tested.
+    ``dispatch()``. This allows the internals of a view to be tested.
     """
     def dispatch(self, request, *args, **kwargs):
         super(DispatchHookMixin, self).dispatch(request, *args, **kwargs)
@@ -48,7 +48,8 @@ class DispatchHookMixin(object):
 
 @as_view.test
 def should_enumerate_unnamed_forms():
-    class TestWizardView(DispatchHookMixin, CookieWizardView):
+    class TestWizardView(DispatchHookMixin, WizardView):
+        storage_name = 'formwizard.storage.dummy.DummyStorage'
         form_list = (Step1, Step2)
 
     expected = SortedDict((
@@ -63,7 +64,8 @@ def should_enumerate_unnamed_forms():
 
 @as_view.test
 def should_preserve_named_forms():
-    class TestWizardView(DispatchHookMixin, CookieWizardView):
+    class TestWizardView(DispatchHookMixin, WizardView):
+        storage_name = 'formwizard.storage.dummy.DummyStorage'
         form_list = (
             ('step1', Step1),
             ('step2', Step2),
@@ -81,7 +83,8 @@ def should_preserve_named_forms():
 
 @as_view.test
 def should_handle_mixed_forms():
-    class TestWizardView(DispatchHookMixin, CookieWizardView):
+    class TestWizardView(DispatchHookMixin, WizardView):
+        storage_name = 'formwizard.storage.dummy.DummyStorage'
         form_list = (
             Step1,
             Step2,
@@ -104,7 +107,8 @@ steps = Tests()
 
 @steps.test
 def by_default_the_first_form_should_be_the_current_step():
-    class TestWizardView(DispatchHookMixin, CookieWizardView):
+    class TestWizardView(DispatchHookMixin, WizardView):
+        storage_name = 'formwizard.storage.dummy.DummyStorage'
         form_list = (
             Step1,
             Step2,
@@ -115,7 +119,8 @@ def by_default_the_first_form_should_be_the_current_step():
     assert instance.steps.current.name == '0'
 
     # check named version
-    class TestWizardView(DispatchHookMixin, CookieWizardView):
+    class TestWizardView(DispatchHookMixin, WizardView):
+        storage_name = 'formwizard.storage.dummy.DummyStorage'
         form_list = (
             ('step1', Step1),
             ('step2', Step2),
@@ -128,7 +133,8 @@ def by_default_the_first_form_should_be_the_current_step():
 
 @steps.test
 def current_step_should_be_persisted_in_backend():
-    class TestWizardView(DispatchHookMixin, CookieWizardView):
+    class TestWizardView(DispatchHookMixin, WizardView):
+        storage_name = 'formwizard.storage.dummy.DummyStorage'
         form_list = (
             Step1,
             Step2,
@@ -140,14 +146,15 @@ def current_step_should_be_persisted_in_backend():
     instance = view(request)
     assert instance.storage.current_step.name == '0'
 
-    request = factory.post('/', {'test_wizard_view-current_step': '1'})
+    request = factory.post('/', {'tests.forms.TestWizardView|default-current_step': '1'})
     instance = view(request)
     assert instance.storage.current_step.name == '1'
 
 
 @steps.test
 def form_list_should_honor_conditions():
-    class TestWizardView(DispatchHookMixin, CookieWizardView):
+    class TestWizardView(DispatchHookMixin, WizardView):
+        storage_name = 'formwizard.storage.dummy.DummyStorage'
         form_list = (
             Step1,
             Step2,
@@ -170,7 +177,8 @@ def initial_dict_should_be_honored():
                 raise ValueError
             super(InitialRequiredForm, self).__init__(*args, **kwargs)
 
-    class TestWizardView(DispatchHookMixin, CookieWizardView):
+    class TestWizardView(DispatchHookMixin, WizardView):
+        storage_name = 'formwizard.storage.dummy.DummyStorage'
         form_list = (
             InitialRequiredForm,
             Step2,
@@ -202,7 +210,8 @@ def instance_dict_should_be_honored():
     InstanceRequiredFormSet = modelformset_factory(
             Person, InstanceRequiredForm, extra=0)
 
-    class TestWizardView(DispatchHookMixin, CookieWizardView):
+    class TestWizardView(DispatchHookMixin, WizardView):
+        storage_name = 'formwizard.storage.dummy.DummyStorage'
         form_list = (
             InstanceRequiredForm,
             InstanceRequiredFormSet,
@@ -224,7 +233,8 @@ def instance_dict_should_be_honored():
 
 @steps.test
 def done_raises_exception_unless_implemented():
-    class TestWizardView(DispatchHookMixin, CookieWizardView):
+    class TestWizardView(DispatchHookMixin, WizardView):
+        storage_name = 'formwizard.storage.dummy.DummyStorage'
         form_list = (
             Step1,
         )
@@ -233,12 +243,13 @@ def done_raises_exception_unless_implemented():
     request = factory.get('/')
     instance = view(request)
     with Assert.raises(NotImplementedError):
-        instance.done(form_list=[])
+        instance.done([])
 
 
 @steps.test
 def render_done_performs_validation():
-    class TestWizardView(DispatchHookMixin, CookieWizardView):
+    class TestWizardView(DispatchHookMixin, WizardView):
+        storage_name = 'formwizard.storage.dummy.DummyStorage'
         form_list = (
             Step1,
         )
@@ -257,7 +268,8 @@ formsets = Tests()
 def should_honor_extra_forms_correctly():
     Step1Formset = formset_factory(Step1, extra=3)
 
-    class TestWizardView(DispatchHookMixin, CookieWizardView):
+    class TestWizardView(DispatchHookMixin, WizardView):
+        storage_name = 'formwizard.storage.dummy.DummyStorage'
         form_list = (
             Step1Formset,
         )
@@ -272,12 +284,12 @@ def should_honor_extra_forms_correctly():
 
     # Now add some data for the first form
     step.data = {
-        '0-0-name': 'Brad',
-        '0-1-name': '',
-        '0-2-name': '',
-        '0-TOTAL_FORMS': 3,
-        '0-INITIAL_FORMS': 0,
-        '0-MAX_NUM_FORMS': '',
+        'tests.forms.TestWizardView|default-0-0-name': 'Brad',
+        'tests.forms.TestWizardView|default-0-1-name': '',
+        'tests.forms.TestWizardView|default-0-2-name': '',
+        'tests.forms.TestWizardView|default-0-TOTAL_FORMS': 3,
+        'tests.forms.TestWizardView|default-0-INITIAL_FORMS': 0,
+        'tests.forms.TestWizardView|default-0-MAX_NUM_FORMS': '',
     }
     formset = instance.get_form(step)
     assert len(formset.forms) == 3
@@ -291,7 +303,8 @@ def formsets_should_be_validated():
 
     Step1BorkedFormset = formset_factory(Step1, BorkedFormset)
 
-    class TestWizardView(DispatchHookMixin, CookieWizardView):
+    class TestWizardView(DispatchHookMixin, WizardView):
+        storage_name = 'formwizard.storage.dummy.DummyStorage'
         form_list = (
             Step1BorkedFormset,
         )
@@ -303,8 +316,11 @@ def formsets_should_be_validated():
     assert not instance.get_form(step).non_form_errors()
 
     # Add some data so the form is bound then we should get non_form_errors
-    step.data = {'0-TOTAL_FORMS': '1', '0-INITIAL_FORMS': 0,
-                 '0-MAX_NUM_FORMS': ''}
+    step.data = {
+        'tests.forms.TestWizardView|default-0-TOTAL_FORMS': '1',
+        'tests.forms.TestWizardView|default-0-INITIAL_FORMS': 0,
+        'tests.forms.TestWizardView|default-0-MAX_NUM_FORMS': ''
+    }
     assert instance.get_form(step).non_form_errors() == ['Expected error']
 
 

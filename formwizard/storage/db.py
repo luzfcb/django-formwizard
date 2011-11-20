@@ -8,12 +8,13 @@ class DatabaseStorage(Storage):
     encoder = json.JSONEncoder(separators=(',', ':'))
 
     def process_request(self, request):
-        kwargs = {'pk': self._prefix}
+        kwargs = {'name': self.name, 'namespace': self.namespace}
         # Either session or authentication information is used to scope the
         # wizard state. This is implicit with using CookieStorage or
         # SesssionStorage, but it must be done explicitly here. Preferably the
         # User is used, but fallback to the session key is supported
         try:
+            request.user
             assert request.user.is_authenticated()
             kwargs['user'] = request.user
         except (AssertionError, AttributeError):
