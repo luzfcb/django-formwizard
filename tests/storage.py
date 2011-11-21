@@ -85,19 +85,20 @@ def should_encode_and_decode_properly(temp):
     assert storage.encode() == restored.encode()
 
     with open(__file__, 'rb')as f:
-        content = f.read()
+        expected = f.read()
 
     step = storage['step1']
-    step.files = {'file1': InMemoryUploadedFile(file=open(__file__),
+    step.files = {'file1': InMemoryUploadedFile(file=open(__file__, 'rb'),
                                                 field_name="file1",
                                                 name="filename",
                                                 content_type="text/plain",
-                                                size=len(content),
+                                                size=len(expected),
                                                 charset="utf-8")}
 
     restored.decode(storage.encode())
     restored_step = restored['step1']
-    assert restored_step.files['file1'].read() == content
+    actual = restored_step.files['file1'].read()
+    assert actual == expected
 
 
 session = Tests()
