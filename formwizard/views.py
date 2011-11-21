@@ -215,9 +215,6 @@ class WizardMixin(object):
     def get_namespace(self):
         return '%s.%s' % (self.__class__.__module__, self.__class__.__name__)
 
-    def get_prefix(self):
-        return '%s|%s' % (self.get_namespace(), self.get_name())
-
     def get_storage(self):
         if self.storage_name is None:
             raise ImproperlyConfigured("%s.storage_name is not specified."
@@ -242,7 +239,6 @@ class WizardMixin(object):
         # other stuff to init
         self.name = self.get_name()
         self.namespace = self.get_namespace()
-        self.prefix = self.get_prefix()
         self.steps = StepsHelper(self)
         self.storage = self.get_storage()
         self.storage.process_request(request)
@@ -284,7 +280,7 @@ class WizardMixin(object):
             return self.render(form)
 
         # Check if form was refreshed
-        management_form = ManagementForm(self.request.POST, prefix=self.prefix)
+        management_form = ManagementForm(self.request.POST, prefix='mgmt')
         if not management_form.is_valid():
             raise ValidationError('ManagementForm data is missing or has been '
                                   'tampered.')
@@ -304,21 +300,6 @@ class WizardMixin(object):
             else:
                 return self.render_next_step()
         return self.render(form)
-
-    def get_form_prefix(self, step, form):
-        """
-        Returns the prefix which will be used when calling the actual form for
-        the given step.
-
-        :param step: the form's step
-        :type  step: ``Step`` object
-        :param form: the form
-        :type  form: ``Form`` subclass
-
-        If no step is given, the form_prefix will determine the current step
-        automatically.
-        """
-        return '%s-%s' % (self.prefix, step.name)
 
     def get_form_initial(self, step):
         """
@@ -347,7 +328,7 @@ class WizardMixin(object):
         kwargs = {
             'data': step.data,
             'files': step.files,
-            'prefix': self.get_form_prefix(step, self.form_list[step.name]),
+            'prefix': 'form',
             'initial': self.get_form_initial(step),
         }
         form_class = self.form_list[step.name]
@@ -398,11 +379,11 @@ class WizardMixin(object):
         context['wizard'] = {
             'form': form,
             'steps': self.steps,
-            'management_form': ManagementForm(prefix=self.prefix, initial={
+            'management_form': ManagementForm(prefix='mgmt', initial={
                 'current_step': self.steps.current.name,
             }),
-            'as_html': lambda: self.get_wizard_html(RequestContext(
-                    self.request, context))
+            'as_html': lambda: self.get_wizard_html(
+                    RequestContext(self.request, context))
         }
         return context
 
@@ -515,6 +496,7 @@ class NamedUrlWizardMixin(WizardMixin):
 
         # invalid step name, reset to first and redirect.
         else:
+            print 'invalid', args, kwargs
             self.storage.current_step = self.steps.first
             return redirect(self.steps.first.url)
 
@@ -530,7 +512,7 @@ class NamedUrlWizardMixin(WizardMixin):
             return redirect(next_step.url)
         return super(NamedUrlWizardMixin, self).post(request, *args, **kwargs)
 
-    def get_step_url(self, step_name):
+    def get_step_url(self, **kwargs):
         match = getattr(self, '_step_url_match', None)
         if not match:
             try:
@@ -540,8 +522,7 @@ class NamedUrlWizardMixin(WizardMixin):
                         "Unable to automatically determine wizard URL pattern."
                         " %s.get_step_url() must be implemented."
                         % self.__class__.__name__)
-        kwargs = dict(match.kwargs)
-        kwargs['step'] = step_name
+        kwargs = dict(match.kwargs, **kwargs)
         url_name = ':'.join((match.namespaces + [match.url_name]))
         return reverse(url_name, args=match.args, kwargs=kwargs,
                        current_app=match.app_name)
@@ -552,7 +533,7 @@ class NamedUrlWizardMixin(WizardMixin):
         class NamedUrlStep(Step):
             @property
             def url(self):
-                return wizard.get_step_url(self.name)
+                return wizard.get_step_url(step=self.name)
 
         storage = super(NamedUrlWizardMixin, self).get_storage()
         storage.step_class = NamedUrlStep
@@ -581,7 +562,7 @@ class NamedUrlWizardMixin(WizardMixin):
                         step.data[management_form.add_prefix(key)] = value
         # Make sure we're on the right page.
         if self.kwargs.get('step', None) != self.wizard_done_step_name:
-            return redirect(self.get_step_url(self.wizard_done_step_name))
+            return redirect(self.get_step_url(step=self.wizard_done_step_name))
         return super(NamedUrlWizardMixin, self).render_done()
 
     def render_next_step(self):

@@ -1,3 +1,4 @@
+from __future__ import absolute_import, unicode_literals
 from django.core.exceptions import ImproperlyConfigured
 from django.utils import simplejson as json
 from formwizard.storage import Storage
@@ -36,4 +37,4 @@ class DatabaseStorage(Storage):
         return self.encoder.encode(super(DatabaseStorage, self).encode())
 
     def decode(self, data):
-        return json.loads(data)
+        return super(DatabaseStorage, self).decode(json.loads(data))

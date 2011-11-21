@@ -17,32 +17,31 @@ class NamedUrlWizardTests(TestBase):
         with manager() as client:
             self.client = client
             file1 = open(__file__, 'rb')
-            p = self.prefix
             self.user = User.objects.create(username='brad')
             self.datas = (
                 {
-                    p + 'form1-name': 'Pony',
-                    p + 'form1-thirsty': '2',
-                    p + 'form1-user': self.user.pk,
-                    p + 'current_step': 'form1',
+                    'form-name': 'Pony',
+                    'form-thirsty': '2',
+                    'form-user': self.user.pk,
+                    'mgmt-current_step': 'form1',
                 },
                 {
-                    p + 'form2-address1': '123 Main St',
-                    p + 'form2-address2': 'Djangoland',
-                    p + 'form2-file1': file1,
-                    p + 'current_step': 'form2',
+                    'form-address1': '123 Main St',
+                    'form-address2': 'Djangoland',
+                    'form-file1': file1,
+                    'mgmt-current_step': 'form2',
                 },
                 {
-                    p + 'form3-random_crap': 'blah blah',
-                    p + 'current_step': 'form3',
+                    'form-random_crap': 'blah blah',
+                    'mgmt-current_step': 'form3',
                 },
                 {
-                    p + 'form4-INITIAL_FORMS': '0',
-                    p + 'form4-TOTAL_FORMS': '2',
-                    p + 'form4-MAX_NUM_FORMS': '0',
-                    p + 'form4-0-random_crap': 'blah blah',
-                    p + 'form4-1-random_crap': 'blah blah',
-                    p + 'current_step': 'form4',
+                    'form-INITIAL_FORMS': '0',
+                    'form-TOTAL_FORMS': '2',
+                    'form-MAX_NUM_FORMS': '0',
+                    'form-0-random_crap': 'blah blah',
+                    'form-1-random_crap': 'blah blah',
+                    'mgmt-current_step': 'form4',
                 }
             )
             try:

@@ -146,7 +146,7 @@ def current_step_should_be_persisted_in_backend():
     instance = view(request)
     assert instance.storage.current_step.name == '0'
 
-    request = factory.post('/', {'tests.forms.TestWizardView|default-current_step': '1'})
+    request = factory.post('/', {'mgmt-current_step': '1'})
     instance = view(request)
     assert instance.storage.current_step.name == '1'
 
@@ -284,12 +284,12 @@ def should_honor_extra_forms_correctly():
 
     # Now add some data for the first form
     step.data = {
-        'tests.forms.TestWizardView|default-0-0-name': 'Brad',
-        'tests.forms.TestWizardView|default-0-1-name': '',
-        'tests.forms.TestWizardView|default-0-2-name': '',
-        'tests.forms.TestWizardView|default-0-TOTAL_FORMS': 3,
-        'tests.forms.TestWizardView|default-0-INITIAL_FORMS': 0,
-        'tests.forms.TestWizardView|default-0-MAX_NUM_FORMS': '',
+        'form-0-name': 'Brad',
+        'form-1-name': '',
+        'form-2-name': '',
+        'form-TOTAL_FORMS': 3,
+        'form-INITIAL_FORMS': 0,
+        'form-MAX_NUM_FORMS': '',
     }
     formset = instance.get_form(step)
     assert len(formset.forms) == 3
@@ -317,9 +317,9 @@ def formsets_should_be_validated():
 
     # Add some data so the form is bound then we should get non_form_errors
     step.data = {
-        'tests.forms.TestWizardView|default-0-TOTAL_FORMS': '1',
-        'tests.forms.TestWizardView|default-0-INITIAL_FORMS': 0,
-        'tests.forms.TestWizardView|default-0-MAX_NUM_FORMS': ''
+        'form-TOTAL_FORMS': '1',
+        'form-INITIAL_FORMS': 0,
+        'form-MAX_NUM_FORMS': ''
     }
     assert instance.get_form(step).non_form_errors() == ['Expected error']
 

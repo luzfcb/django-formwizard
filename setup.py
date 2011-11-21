@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='django-formwizard',
-    version='1.1.dev',
+    version='1.1',
     description='A FormWizard for Django with multiple storage backends',
     long_description=open("README.rst").read(),
     author='Stephan Jaekel',
