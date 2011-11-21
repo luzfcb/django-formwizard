@@ -496,7 +496,6 @@ class NamedUrlWizardMixin(WizardMixin):
 
         # invalid step name, reset to first and redirect.
         else:
-            print 'invalid', args, kwargs
             self.storage.current_step = self.steps.first
             return redirect(self.steps.first.url)
 

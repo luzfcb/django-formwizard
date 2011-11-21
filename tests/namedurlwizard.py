@@ -55,10 +55,7 @@ class NamedUrlWizardTests(TestBase):
 
     @test
     def initial_request_should_work(self):
-        print self.url
         response = self.client.get(self.url, follow=False)
-        print self.url
-        print response.status_code
         assert response.status_code == 302
         assert response['Location'].endswith('/form1/')
 

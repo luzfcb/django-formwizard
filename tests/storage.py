@@ -235,7 +235,6 @@ def should_create_new_model_instance_referencing_to_session():
     request = factory.get('/')
     request.session = SessionStore()
     storage.process_request(request)
-    print request.session.session_key
     assert WizardState.objects.count() == 1
     assert WizardState.objects.get(name='name', namespace='namespace',
                                    session_key=request.session.session_key)

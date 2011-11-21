@@ -91,9 +91,6 @@ class WizardTests(TestBase):
         assert response.status_code == 200
 
         steps = response.context['wizard']['steps']
-        print response.context['wizard']['form'].errors
-        print steps
-        print steps.current.name
         assert steps.current.name == 'form2'
         assert steps.index0 == 1
         assert steps.prev.name == 'form1'
@@ -160,7 +157,6 @@ class WizardTests(TestBase):
                 merged_cleaned_data.update(form.cleaned_data)
 
         del merged_cleaned_data['file1']
-        print merged_cleaned_data
         assert merged_cleaned_data == {
             'name': 'Pony',
             'thirsty': True,
