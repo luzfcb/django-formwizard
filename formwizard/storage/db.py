@@ -19,7 +19,6 @@ class DatabaseStorage(Storage):
         # SesssionStorage, but it must be done explicitly here. Preferably the
         # User is used, but fallback to the session key is supported
         try:
-            request.user
             assert request.user.is_authenticated()
             kwargs['user'] = request.user
         except (AssertionError, AttributeError):

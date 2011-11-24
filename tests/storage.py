@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, unicode_literals
 from attest import assert_hook, Assert, Tests
+from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured, SuspiciousOperation
 from django.core.files.storage import FileSystemStorage
 from django.core.files.uploadedfile import InMemoryUploadedFile
@@ -308,27 +309,28 @@ def should_completely_remove_data_from_database_when_deleted():
     # Do an initial request, to add some data to the storage
     request, response = factory.get('/'), HttpResponse('')
     middleware.process_request(request)
+    # The session key isn't actually determined until the session is used (it's
+    # all lazy), so we'll set some test data initially that we can then use
+    # later.
+    request.session['some other data'] = 'testing'
+    session_key = request.session.session_key  # save for later request
     storage = DatabaseStorage('name', 'namespace')
     storage.process_request(request)
     step = storage['step1']
     step.data = {'blarg': 'bloog'}
     storage.process_response(response)
     middleware.process_response(request, response)
-
     assert WizardState.objects.filter(name='name', namespace='namespace').count() == 1
 
     # check deletion
     request = factory.get('/')
-    # keep same sessionid
-    request.COOKIES.update(((k, v.value)
-                            for k, v in response.cookies.iteritems()))
+    request.COOKIES[settings.SESSION_COOKIE_NAME] = session_key # use session
     middleware.process_request(request)
     storage = DatabaseStorage('name', 'namespace')
     storage.process_request(request)
     storage.delete()
-    response = HttpResponse('')
-    storage.process_response(response)
+    storage.process_response(HttpResponse(''))
     assert WizardState.objects.filter(name='name', namespace='namespace').count() == 0
-
+    assert request.session['some other data'] == 'testing'
 
 tests = Tests((cookie, core, db, session))
