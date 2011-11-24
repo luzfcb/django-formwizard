@@ -15,13 +15,13 @@ class WizardState(models.Model):
     name = models.CharField(max_length=200)
     namespace = models.CharField(max_length=200)
     session_key = models.CharField(max_length=40, blank=True)
-    user = models.ForeignKey('auth.User', null=True)
+    user = models.ForeignKey('auth.User', blank=True, null=True)
     data = models.TextField(default='{"current_step":null,"steps":{}}')
     created_at = models.DateTimeField(default=datetime.now)
     modified_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('name', 'namespace')
+        unique_together = ('name', 'namespace', 'session_key', 'user')
 
     def clean(self):
         if not (self.session_key or self.user):

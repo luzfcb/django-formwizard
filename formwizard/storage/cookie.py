@@ -19,13 +19,18 @@ class CookieStorage(Storage):
     def __init__(self, *args, **kwargs):
         super(CookieStorage, self).__init__(*args, **kwargs)
         self.key = ('%s|%s' % (self.namespace, self.name)).encode('utf-8')
+        self._delete = False
 
     def process_request(self, request):
         self.decode(request.COOKIES.get(self.key, ''))
 
     def process_response(self, response):
-        if self.steps or self.current_step:
+        if not self._delete and (self.steps or self.current_step):
             response.set_cookie(self.key, self.encode())
+
+    def delete(self):
+        self.reset()
+        self._delete = True
 
     def decode(self, data):
         # check integrity

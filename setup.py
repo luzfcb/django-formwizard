@@ -1,14 +1,13 @@
-from os.path import abspath, dirname, join
 from setuptools import setup, find_packages
 
 
 setup(
     name='django-formwizard',
-    version='1.1',
+    version='1.2',
     description='A FormWizard for Django with multiple storage backends',
     long_description=open("README.rst").read(),
-    author='Stephan Jaekel',
-    author_email='steph@rdev.info',
+    author='Bradley Ayers',
+    author_email='bradley.ayers@gmail.com',
     url='http://github.com/bradleyayers/django-formwizard/',
     packages=find_packages(exclude=['tests', 'tests.*',
                                     'test_project', 'test_project.*']),

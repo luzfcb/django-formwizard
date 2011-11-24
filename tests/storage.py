@@ -128,6 +128,42 @@ def should_raise_exception_if_session_middleware_not_used():
     view(request)
 
 
+@session.test
+def should_completely_remove_data_from_session_when_deleted():
+    # Do an initial request, to add some data to the storage
+    middleware = SessionMiddleware()
+    request, response = factory.get('/'), HttpResponse('')
+    middleware.process_request(request)
+    storage = SessionStorage('name', 'namespace')
+    storage.process_request(request)
+    step = storage['step1']
+    step.data = {'blarg': 'bloog'}
+    storage.process_response(response)
+    middleware.process_response(request, response)
+
+    # Create a fake request, to ensure that the data was saved properly, and
+    # then delete the stored data.
+    request = factory.get('/')
+    request.COOKIES.update(((k, v.value)
+                            for k, v in response.cookies.iteritems()))
+    middleware.process_request(request)
+    assert 'namespace|name' in request.session
+    # do the delete
+    storage = SessionStorage('name', 'namespace')
+    storage.process_request(request)
+    storage.delete()
+    response = HttpResponse('')
+    storage.process_response(response)
+    middleware.process_response(request, response)
+
+    # Create another fake request, to ensure that the data is gone!
+    request = factory.get('/')
+    request.COOKIES.update(((k, v.value)
+                            for k, v in response.cookies.iteritems()))
+    middleware.process_request(request)
+    assert 'namespace|name' not in request.session
+
+
 cookie = Tests()
 
 
@@ -175,6 +211,30 @@ def reset_should_clear_data():
 
     expected = '{"current_step":null,"steps":{}}'
     assert storage.encode() == '%s$%s' % (storage.hmac(expected), expected)
+
+
+@cookie.test
+def should_completely_remove_data_from_cookies_when_deleted():
+    # Do an initial request, to add some data to the storage
+    request, response = factory.get('/'), HttpResponse('')
+    storage = CookieStorage('name', 'namespace')
+    storage.process_request(request)
+    step = storage['step1']
+    step.data = {'blarg': 'bloog'}
+    storage.process_response(response)
+    assert 'namespace|name' in response.cookies
+
+    # check deletion
+    request = factory.get('/')
+    request.COOKIES.update(((k, v.value)
+                            for k, v in response.cookies.iteritems()))
+    assert 'namespace|name' in request.COOKIES
+    storage = CookieStorage('name', 'namespace')
+    storage.process_request(request)
+    storage.delete()
+    response = HttpResponse('')
+    storage.process_response(response)
+    assert 'namespace|name' not in response.cookies
 
 
 db = Tests()
@@ -239,6 +299,36 @@ def should_create_new_model_instance_referencing_to_session():
     assert WizardState.objects.count() == 1
     assert WizardState.objects.get(name='name', namespace='namespace',
                                    session_key=request.session.session_key)
+
+
+@db.test
+def should_completely_remove_data_from_database_when_deleted():
+    middleware = SessionMiddleware()
+
+    # Do an initial request, to add some data to the storage
+    request, response = factory.get('/'), HttpResponse('')
+    middleware.process_request(request)
+    storage = DatabaseStorage('name', 'namespace')
+    storage.process_request(request)
+    step = storage['step1']
+    step.data = {'blarg': 'bloog'}
+    storage.process_response(response)
+    middleware.process_response(request, response)
+
+    assert WizardState.objects.filter(name='name', namespace='namespace').count() == 1
+
+    # check deletion
+    request = factory.get('/')
+    # keep same sessionid
+    request.COOKIES.update(((k, v.value)
+                            for k, v in response.cookies.iteritems()))
+    middleware.process_request(request)
+    storage = DatabaseStorage('name', 'namespace')
+    storage.process_request(request)
+    storage.delete()
+    response = HttpResponse('')
+    storage.process_response(response)
+    assert WizardState.objects.filter(name='name', namespace='namespace').count() == 0
 
 
 tests = Tests((cookie, core, db, session))

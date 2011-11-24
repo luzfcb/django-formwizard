@@ -71,6 +71,12 @@ class Storage(object):
         self.steps = {}
         self.current_step = None
 
+    def delete(self):
+        """
+        Deletes the record entirely from the storage.
+        """
+        raise NotImplementedError
+
     def __getitem__(self, name):
         """
         Returns the step with the given name.

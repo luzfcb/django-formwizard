@@ -10,6 +10,7 @@ class SessionStorage(Storage):
     def __init__(self, *args, **kwargs):
         super(SessionStorage, self).__init__(*args, **kwargs)
         self.key = ('%s|%s' % (self.namespace, self.name)).encode('utf-8')
+        self._deleted = False  # delete requested?
 
     def process_request(self, request):
         if not hasattr(request, 'session'):
@@ -22,5 +23,14 @@ class SessionStorage(Storage):
         self.decode(data)
 
     def process_response(self, response):
-        self._session.setdefault(self.key, {}).update(self.encode())
-        self._session.modified = True
+        if not self._deleted:
+            self._session.setdefault(self.key, {}).update(self.encode())
+            self._session.modified = True
+
+    def delete(self):
+        try:
+            del self._session[self.key]
+        except KeyError:
+            pass
+        self.reset()
+        self._deleted = True
