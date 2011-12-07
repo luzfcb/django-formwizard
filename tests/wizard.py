@@ -22,28 +22,28 @@ class WizardTests(TestBase):
             self.user = User.objects.create(username='brad')
             self.datas = (
                 {
-                    'form-name': 'Pony',
-                    'form-thirsty': '2',
-                    'form-user': self.user.pk,
-                    'mgmt-current_step': 'form1',
+                    'form-0-name': 'Pony',
+                    'form-0-thirsty': '2',
+                    'form-0-user': self.user.pk,
+                    'mgmt-current_step': 'Step 1',
                 },
                 {
-                    'form-address1': '123 Main St',
-                    'form-address2': 'Djangoland',
-                    'form-file1': file1,
-                    'mgmt-current_step': 'form2',
+                    'form-0-address1': '123 Main St',
+                    'form-0-address2': 'Djangoland',
+                    'form-0-file1': file1,
+                    'mgmt-current_step': 'Step 2',
                 },
                 {
-                    'form-random_crap': 'blah blah',
-                    'mgmt-current_step': 'form3',
-                },
-                {
-                    'form-INITIAL_FORMS': '0',
-                    'form-TOTAL_FORMS': '2',
-                    'form-MAX_NUM_FORMS': '0',
                     'form-0-random_crap': 'blah blah',
-                    'form-1-random_crap': 'blah blah',
-                    'mgmt-current_step': 'form4',
+                    'mgmt-current_step': 'Step 3',
+                },
+                {
+                    'form-0-INITIAL_FORMS': '0',
+                    'form-0-TOTAL_FORMS': '2',
+                    'form-0-MAX_NUM_FORMS': '0',
+                    'form-0-0-random_crap': 'blah blah',
+                    'form-0-1-random_crap': 'blah blah',
+                    'mgmt-current_step': 'Step 4',
                 }
             )
             try:
@@ -61,13 +61,13 @@ class WizardTests(TestBase):
         assert response.status_code == 200
 
         steps = response.context['wizard']['steps']
-        assert steps.current.name == 'form1'
+        assert steps.current.name == 'Step 1'
         assert steps.index == 0
         assert steps.index0 == 0
         assert steps.index1 == 1
-        assert steps.last.name == 'form4'
+        assert steps.last.name == 'Step 4'
         assert steps.prev == None
-        assert steps.next.name == 'form2'
+        assert steps.next.name == 'Step 2'
         assert steps.count == 4
 
     @test
@@ -79,8 +79,9 @@ class WizardTests(TestBase):
                 break
         response = self.client.post(self.url, data)
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'form1'
-        assert response.context['wizard']['form'].errors == {
+        assert response.context['wizard']['steps'].current.name == 'Step 1'
+        (form, ) = response.context['wizard']['forms']
+        assert form.errors == {
             'name': [u'This field is required.'],
             'user': [u'This field is required.']
         }
@@ -91,37 +92,37 @@ class WizardTests(TestBase):
         assert response.status_code == 200
 
         steps = response.context['wizard']['steps']
-        assert steps.current.name == 'form2'
+        assert steps.current.name == 'Step 2'
         assert steps.index0 == 1
-        assert steps.prev.name == 'form1'
-        assert steps.next.name == 'form3'
+        assert steps.prev.name == 'Step 1'
+        assert steps.next.name == 'Step 3'
 
     @test
     def should_allow_jumping_between_steps(self):
         response = self.client.get(self.url)
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'form1'
+        assert response.context['wizard']['steps'].current.name == 'Step 1'
 
         response = self.client.post(self.url, self.datas[0])
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'form2'
+        assert response.context['wizard']['steps'].current.name == 'Step 2'
 
         response = self.client.post(self.url, {
             'wizard_next_step': response.context['wizard']['steps'].prev.name
         })
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'form1'
+        assert response.context['wizard']['steps'].current.name == 'Step 1'
 
     @test
     def should_have_extra_template_context_in_subclass(self):
         response = self.client.get(self.url)
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'form1'
+        assert response.context['wizard']['steps'].current.name == 'Step 1'
         assert response.context.get('another_var') == None
 
         response = self.client.post(self.url, self.datas[0])
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'form2'
+        assert response.context['wizard']['steps'].current.name == 'Step 2'
         assert response.context.get('another_var') == True
 
     @test
@@ -131,22 +132,22 @@ class WizardTests(TestBase):
 
         response = self.client.post(self.url, self.datas[0])
         assert response.status_code == 200
-        assert response.context['view'].steps.current.name == 'form2'
+        assert response.context['view'].steps.current.name == 'Step 2'
 
         response = self.client.post(self.url, self.datas[1])
         assert response.status_code == 200
-        assert response.context['view'].steps.current.name == 'form3'
+        assert response.context['view'].steps.current.name == 'Step 3'
 
         response = self.client.post(self.url, self.datas[2])
         assert response.status_code == 200
-        assert response.context['view'].steps.current.name == 'form4'
+        assert response.context['view'].steps.current.name == 'Step 4'
 
         response = self.client.post(self.url, self.datas[3])
         assert response.status_code == 200
 
         forms = response.context['forms']
         with open(__file__, 'rb') as f:
-            assert forms['form2'].cleaned_data['file1'].read() == f.read()
+            assert forms['Step 2'].cleaned_data['file1'].read() == f.read()
 
         merged_cleaned_data = {}
         for step_name, form in forms.iteritems():
@@ -164,7 +165,7 @@ class WizardTests(TestBase):
             'address1': '123 Main St',
             'address2': 'Djangoland',
             'random_crap': 'blah blah',
-            'form4': [
+            'Step 4': [
                 {'random_crap': 'blah blah'},
                 {'random_crap': 'blah blah'},
             ]
@@ -191,37 +192,37 @@ class WizardTests(TestBase):
 
         response = self.client.post(self.url, self.datas[3])
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'form1'
+        assert response.context['wizard']['steps'].current.name == 'Step 1'
 
 
     @test
     def resubmitting_a_form_shouldnt_break_things(self):
         response = self.client.get(self.url)
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'form1'
+        assert response.context['wizard']['steps'].current.name == 'Step 1'
 
         # post correct data, should proceed to step 2
         response = self.client.post(self.url, self.datas[0])
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'form2'
+        assert response.context['wizard']['steps'].current.name == 'Step 2'
 
         # post same data, this is essentially a 'browser refresh'
         response = self.client.post(self.url, self.datas[0])
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'form2'
+        assert response.context['wizard']['steps'].current.name == 'Step 2'
 
         # post valid data for the second step
         response = self.client.post(self.url, self.datas[1])
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'form3'
+        assert response.context['wizard']['steps'].current.name == 'Step 3'
 
         response = self.client.post(self.url, self.datas[2])
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'form4'
+        assert response.context['wizard']['steps'].current.name == 'Step 4'
 
         response = self.client.post(self.url, self.datas[0])
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'form2'
+        assert response.context['wizard']['steps'].current.name == 'Step 2'
 
         response = self.client.post(self.url, self.datas[3])
         assert response.status_code == 200
@@ -243,8 +244,8 @@ tests = Tests([SessionTests(), CookieTests()])
 @tests.test
 def missing_storage_class_should_raise_improperly_configured():
     class TestWizard(WizardView):
-        form_list = (
-            Page1,
+        steps = (
+            ("Page 1", Page1),
         )
 
     factory = RequestFactory()

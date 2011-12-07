@@ -9,9 +9,9 @@ wizard_patterns = patterns('',
 
 namedurlwizard_patterns = patterns('',
     url(r'^session/$',              namedurlwizard.SessionContactWizard.as_view(), name='session'),
-    url(r'^session/(?P<step>.+)/$', namedurlwizard.SessionContactWizard.as_view(), name='session'),
+    url(r'^session/(?P<slug>.+)/$', namedurlwizard.SessionContactWizard.as_view(), name='session'),
     url(r'^cookie/$',               namedurlwizard.CookieContactWizard.as_view(),  name='cookie'),
-    url(r'^cookie/(?P<step>.+)/$',  namedurlwizard.CookieContactWizard.as_view(),  name='cookie'),
+    url(r'^cookie/(?P<slug>.+)/$',  namedurlwizard.CookieContactWizard.as_view(),  name='cookie'),
 )
 
 urlpatterns = patterns('',

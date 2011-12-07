@@ -1,8 +1,8 @@
 from __future__ import absolute_import, unicode_literals
-from django import forms
-from django.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.core.urlresolvers import reverse, resolve
-from django.forms import formsets, ValidationError
+from django.forms import FileField
+from django.forms.formsets import BaseFormSet
 from django.forms.models import ModelForm, BaseModelFormSet
 from django.http import Http404
 from django.shortcuts import redirect
@@ -17,12 +17,10 @@ from formwizard.forms import ManagementForm
 import re
 
 
-def normalize_name(name):
-    new = re.sub('(((?<=[a-z])[A-Z])|([A-Z](?![A-Z]|$)))', '_\\1', name)
-    return new.lower().strip('_')
-
-
-class StepsHelper(object):
+class StepsManager(object):
+    """
+    A helper class that makes accessing steps easier.
+    """
 
     def __init__(self, wizard):
         self._wizard = wizard
@@ -34,18 +32,37 @@ class StepsHelper(object):
         return self.count
 
     def __repr__(self):
-        return '<StepsHelper for %s (steps: %s)>' % (self._wizard, self.all)
+        return '<%s for %s (steps: %s)>' % (self.__class__.__name__,
+                                            self._wizard, self.all)
+
+    def __getitem__(self, step_name):
+        """
+        :param item: step name
+        :type  item: ``unicode``
+        """
+        step = self._wizard.storage[step_name]
+        if not step.forms:
+            step.forms = self._wizard.forms[step_name]
+        return step
+
+    def __iter__(self):
+        for name in self._wizard.get_forms().keys():
+            yield self[name]
+
+    def from_slug(self, slug):
+        for step in self:
+            if step.slug == slug:
+                return step
 
     @property
     def all(self):
         """Returns a ``list`` of all steps in the wizard."""
-        return [self._wizard.storage[s]
-                for s in self._wizard.get_form_list().keys()]
+        return list(self)
 
     @property
     def count(self):
         """Returns the total number of steps/forms in this the wizard."""
-        return len(self._wizard.get_form_list())
+        return len(self._wizard.get_forms())
 
     @property
     def current(self):
@@ -58,14 +75,12 @@ class StepsHelper(object):
     @property
     def first(self):
         "Returns the name of the first step."
-        form_list = self._wizard.get_form_list()
-        return self._wizard.storage[form_list.keyOrder[0]]
+        return self[self._wizard.get_forms().keyOrder[0]]
 
     @property
     def last(self):
         "Returns the name of the last step."
-        form_list = self._wizard.get_form_list()
-        return self._wizard.storage[form_list.keyOrder[-1]]
+        return self[self._wizard.get_forms().keyOrder[-1]]
 
     @property
     def next(self):
@@ -74,140 +89,110 @@ class StepsHelper(object):
         returned.
         """
         key = self.index + 1
-        form_list = self._wizard.get_form_list()
-        if len(form_list.keyOrder) > key:
-            return self._wizard.storage[form_list.keyOrder[key]]
+        forms = self._wizard.get_forms()
+        if len(forms.keyOrder) > key:
+            return self[forms.keyOrder[key]]
         return None
 
     @property
     def prev(self):
         "Returns the previous step."
         key = self.index - 1
-        form_list = self._wizard.get_form_list()
+        forms = self._wizard.get_forms()
         if key >= 0:
-            return self._wizard.storage[form_list.keyOrder[key]]
+            return self[forms.keyOrder[key]]
         return None
 
     @property
     def index(self):
         """Returns the index for the current step (0-based)."""
-        return self._wizard.get_form_list().keyOrder.index(self.current.name)
+        return self._wizard.get_forms().keyOrder.index(self.current.name)
 
     index0 = index
 
     @property
     def index1(self):
         """Returns thei ndex for the current step (1-based)."""
-        return int(self.index0) + 1
+        return self.index0 + 1
 
 
 class WizardMixin(object):
     """
     The WizardView is used to create multi-page forms and handles all the
-    storage and validation stuff. The wizard is based on Django's generic
-    class based views.
+    storage and validation. The wizard is based on Django's generic class based
+    views.
 
-    :param     wizard_template: Template to render for ``wizard.as_html``
-                                (default: ``console/includes/tab_wizard.html``)
-    :type      wizard_template: unicode
+    :param               storage: module path to wizard ``Storage`` class
+    :type                storage: ``unicode``
+    :param          file_storage: module path to one of Django's File Storage
+    :type           file_storage: ``unicode``
+    :param                 steps: The pieces in the wizard. This is converted
+                                  to a ``StepsManager`` object during
+                                  ``as_view()``.
+    :type                  steps: ``(("name", Form), ...)`` or
+                                  ``(("name", [Form, ...]), ...)``
+    :param       wizard_template: Template to render for ``wizard.as_html``
+                                  (default: ``formwizard/wizard_form.html``)
+    :type        wizard_template: ``unicode``
+    :param wizard_step_templates: Templates for individual steps
+    :type  wizard_step_templates: ``{step_name: template, ...}``
     """
-    storage_name = None
-    form_list = ()
+    storage = None
     file_storage = None
-    initial_dict = None
-    instance_dict = None
-    condition_dict = None
-    template_name = 'formwizard/wizard_form.html'
-    wizard_template_name = 'formwizard/wizard_form.html'
+    forms = None
+    steps = ()
+    wizard_template = 'formwizard/wizard_form.html'
+    wizard_step_templates = None
 
     def __repr__(self):
-        return '<%s: forms: %s>' % (self.__class__.__name__, self.form_list)
+        return '<%s: forms: %s>' % (self.__class__.__name__, self.forms)
 
     @classonlymethod
-    def as_view(cls, form_list=None, initial_dict=None, instance_dict=None,
-                condition_dict=None, *args, **kwargs):
-        """
-        This method is used within urls.py to create unique formwizard
-        instances for every request. We need to override this method because
-        we add some kwargs which are needed to make the formwizard usable.
+    def as_view(cls, steps=None, *args, **kwargs):
+        steps = steps or cls.steps
 
-        Creates a dict with all needed parameters for the form wizard
-        instances.
+        # validation
+        view = '%s.%s' % (cls.__module__, cls.__name__)  # used in errors
+        if len(steps) == 0:
+            raise ImproperlyConfigured("`%s` requires at least one step." % view)
+        if not all((isinstance(i, (tuple, list)) and len(i) == 2 for i in steps)):
+            raise ImproperlyConfigured("`%s.steps` poorly formed." % view)
 
-        * `form_list` - is a list of forms. The list entries can be single form
-          classes or tuples of (`<step name>`, `<form class>`). If you pass a
-          list of forms, the formwizard will convert the class list to
-          (`zero_based_counter`, `form_class`). This is needed to access the
-          form for a specific step.
-        * `initial_dict` - contains a dictionary of initial data dictionaries.
-          The key should be equal to the `step_name` in the `form_list` (or
-          the str of the zero based counter - if no step_names added in the
-          `form_list`)
-        * `instance_dict` - contains a dictionary of instance objects. This
-          list is only used when `ModelForm`s are used. The key should be equal
-          to the `step_name` in the `form_list`. Same rules as for
-          `initial_dict` apply.
-        * `condition_dict` - contains a dictionary of boolean values or
-          callables. If the value of for a specific `step_name` is callable it
-          will be called with the formwizard instance as the only argument.
-          If the return value is true, the step's form will be used.
-        """
-        form_list = form_list or cls.form_list
-        assert len(form_list) > 0, 'at least one form is needed'
+        forms_dict = SortedDict()
 
-        kwargs.update({
-            'initial_dict': initial_dict or cls.initial_dict or {},
-            'instance_dict': instance_dict or cls.instance_dict or {},
-            'condition_dict': condition_dict or cls.condition_dict or {},
-        })
-        form_dict = SortedDict()
+        # populate forms
+        for name, forms in steps:
+            if not isinstance(forms, (tuple, list)):
+                forms = (forms, )
+            forms_dict[unicode(name)] = forms
 
-        # walk through the passed form list
-        for i, item in enumerate(form_list):
-            if isinstance(item, (list, tuple)):
-                # if the element is a tuple, add the tuple to the new created
-                # sorted dictionary.
-                form_dict[unicode(item[0])] = item[1]
-            else:
-                # if not, add the form with a zero based counter as unicode
-                form_dict[unicode(i)] = item
-
+        # If any forms are using FileField, ensure file storage is configured.
         if not cls.file_storage:
-            # If any forms are using FileField, ensure file storage is
-            # configured.
-            for form_class in form_dict.itervalues():
-                if issubclass(form_class, formsets.BaseFormSet):
-                    form_class = form_class.form
-                for field in form_class.base_fields.itervalues():
-                    if isinstance(field, forms.FileField):
-                        raise NoFileStorageConfigured
+            for forms in (form for form in forms_dict.itervalues()):
+                for form in forms:
+                    if issubclass(form, BaseFormSet):
+                        form = form.form
+                    for field in form.base_fields.itervalues():
+                        if isinstance(field, FileField):
+                            view = '%s.%s' % (cls.__module__, cls.__name__)
+                            raise NoFileStorageConfigured(
+                                    "%s contains a FileField, but "
+                                    "`%s.file_storage` was not specified."
+                                    % (form, view))
 
         # build the kwargs for the formwizard instances
-        kwargs['form_list'] = form_dict
+        kwargs.setdefault('wizard_step_templates', {})
+        kwargs['forms'] = forms_dict
         return super(WizardMixin, cls).as_view(*args, **kwargs)
 
-    def get_form_list(self):
+    def get_forms(self):
         """
-        This method returns a form_list based on the initial form list but
-        checks if there is a condition method/value in the condition_list.
-        If an entry exists in the condition list, it will call/read the value
-        and respect the result. (True means add the form, False means ignore
-        the form)
+        Returns the forms to include in the wizard. This can be used as a hook
+        to filter the forms based on some runtime state.
 
-        The form_list is always generated on the fly because condition methods
-        could use data from other (maybe previous forms).
+        :rtype: ``SortedDict``
         """
-        filtered = SortedDict()
-        for step_name, form_class in self.form_list.iteritems():
-            # try to fetch the value from condition list, by default, the form
-            # gets passed to the new list.
-            condition = self.condition_dict.get(step_name, True)
-            if callable(condition):
-                # call the value if needed, passes the current instance.
-                condition = condition(self)
-            if condition:
-                filtered[step_name] = form_class
-        return filtered
+        return self.forms
 
     def get_name(self):
         return 'default'
@@ -216,13 +201,20 @@ class WizardMixin(object):
         return '%s.%s' % (self.__class__.__module__, self.__class__.__name__)
 
     def get_storage(self):
-        if self.storage_name is None:
-            raise ImproperlyConfigured("%s.storage_name is not specified."
-                                       % self.__class__.__name__)
-        storage_class = get_storage(self.storage_name)
-        return storage_class(name=self.name,
-                             namespace=self.namespace,
-                             file_storage=self.file_storage)
+        if self.storage is None:
+            view = '%s.%s' % (self.__class__.__module__,
+                              self.__class__.__name__)
+            raise ImproperlyConfigured("%s.storage is not specified." % view)
+        if isinstance(self.storage, basestring):
+            storage_class = get_storage(self.storage)
+            return storage_class(name=self.name,
+                                 namespace=self.namespace,
+                                 file_storage=self.get_file_storage())
+        else:
+            return self.storage
+
+    def get_file_storage(self):
+        return self.file_storage
 
     def dispatch(self, request, *args, **kwargs):
         """
@@ -234,12 +226,12 @@ class WizardMixin(object):
         response gets updated by the storage engine (for example add cookies).
         """
         # View.dispatch() does this too, but we're doing some initialisation
-        # before that's called, so we'll save these here.
+        # before that's called, so we'll do this now.
         self.request, self.args, self.kwargs = request, args, kwargs
         # other stuff to init
         self.name = self.get_name()
         self.namespace = self.get_namespace()
-        self.steps = StepsHelper(self)
+        self.steps = StepsManager(self)
         self.storage = self.get_storage()
         self.storage.process_request(request)
         response = super(WizardMixin, self).dispatch(request, *args, **kwargs)
@@ -259,7 +251,7 @@ class WizardMixin(object):
         # reset the current step to the first step.
         step = self.steps.first
         self.storage.current_step = step
-        return self.render(self.get_form(step))
+        return self.render(self.get_validated_step_forms(step))
 
     def post(self, request, *args, **kwargs):
         """
@@ -273,89 +265,99 @@ class WizardMixin(object):
         # contains a valid step name. If one was found, render the requested
         # form. (This makes stepping back a lot easier).
         wizard_next_step = self.request.POST.get('wizard_next_step')
-        if wizard_next_step and wizard_next_step in self.get_form_list():
-            step = self.storage[wizard_next_step]
-            self.storage.current_step = step
-            form = self.get_form(step)
-            return self.render(form)
+
+        if wizard_next_step:
+            step = self.steps[wizard_next_step]
+            if step:
+                step = self.steps[wizard_next_step]
+                self.storage.current_step = step
+                forms = self.get_validated_step_forms(step)
+                return self.render(forms)
 
         # Check if form was refreshed
+        validation_error = ValidationError(
+                'ManagementForm data is missing or has been tampered.')
         management_form = ManagementForm(self.request.POST, prefix='mgmt')
         if not management_form.is_valid():
-            raise ValidationError('ManagementForm data is missing or has been '
-                                  'tampered.')
-
-        step = self.storage[management_form.cleaned_data['current_step']]
+            raise validation_error
+        try:
+            step = self.steps[management_form.cleaned_data['current_step']]
+        except KeyError:
+            raise validation_error
         self.storage.current_step = step
-        form = self.get_form(step,
-                             data=self.request.POST,
-                             files=self.request.FILES)
-
-        if form.is_valid():
+        forms = self.get_validated_step_forms(step,
+                                              data=self.request.POST,
+                                              files=self.request.FILES)
+        if all((form.is_valid() for form in forms)):
             # Update step with valid data
-            step.data = form.data
-            step.files = form.files
+            step.data  = self.request.POST
+            step.files = self.request.FILES
             if step == self.steps.last:
                 return self.render_done()
             else:
                 return self.render_next_step()
-        return self.render(form)
+        return self.render(forms)
 
-    def get_form_initial(self, step):
+    def get_forms_initials(self, step):
         """
-        Returns a dictionary which will be passed to the form for ``step``
-        as ``initial``. If no initial data was provied while initializing the
-        form wizard, a empty dictionary will be returned.
-        """
-        return self.initial_dict.get(step.name)
+        Returns the initial data to pass to the forms for *step*.
 
-    def get_form_instance(self, step):
+        :rtype: iterable with same length as number of forms for *step*
         """
-        Returns a object which will be passed to the form for ``step``
-        as ``instance``. If no instance object was provied while initializing
-        the form wizard, None be returned.
-        """
-        return self.instance_dict.get(step.name)
+        return (None, ) * len(step.forms)
 
-    def get_form_kwargs(self, step):
+    def get_forms_instances(self, step):
         """
-        Returns the keyword arguments for instantiating the form
-        (or formset) on given step.
+        Returns the model instances to pass to the forms for *step*.
+
+        :rtype: iterable with same length as number of forms for *step*
+        """
+        return (None, ) * len(step.forms)
+
+    def get_forms_kwargs(self, step):
+        """
+        Returns the keyword arguments for instantiating the forms
+        (or formsets) on given step.
 
         This is useful if a specific form needs some extra constructor
         arguments, e.g. a form that requires the HTTP request.
-        """
-        kwargs = {
-            'data': step.data,
-            'files': step.files,
-            'prefix': 'form',
-            'initial': self.get_form_initial(step),
-        }
-        form_class = self.form_list[step.name]
-        if issubclass(form_class, ModelForm):
-            # If the form is based on ModelForm, add instance if available.
-            kwargs.update({'instance': self.get_form_instance(step)})
-        elif issubclass(form_class, BaseModelFormSet):
-            # If the form is based on ModelFormSet, add queryset if available.
-            kwargs.update({'queryset': self.get_form_instance(step)})
-        return kwargs
 
-    def get_form(self, step, **kwargs):
+        :rtype: iterable with same length as number of forms for *step*
         """
-        Constructs the form for a given ``step``.
+        kwargss = []
+        initials = self.get_forms_initials(step)
+        instances = self.get_forms_instances(step)
+        for i, form in enumerate(step.forms):
+            kwargs = {
+                'data': step.data,
+                'files': step.files,
+                'prefix': 'form-%s' % i,
+                'initial': initials[i],
+            }
+            if issubclass(form, ModelForm):
+                # If the form is based on ModelForm, add instance if available.
+                kwargs['instance'] = instances[i]
+            elif issubclass(form, BaseModelFormSet):
+                # If the form is based on ModelFormSet, add queryset if
+                # available.
+                kwargs['queryset'] = instances[i]
+            kwargss.append(kwargs)
+        return kwargss
 
-        The form will be initialized using the ``data`` argument to prefill the
-        new form. If needed, instance or queryset (for ``ModelForm`` or
-        ``ModelFormSet``) will be added too.
+    def get_validated_step_forms(self, step, **kwargs):
         """
-        form_kwargs = self.get_form_kwargs(step)
-        form_kwargs.update(kwargs)
-        form_class = self.form_list[step.name]
-        form = form_class(**form_kwargs)
-        form.is_valid()  # trigger validation
-        return form
+        Returns validated form objects for the given *step*.
+        """
+        forms = []
+        for form_kwargs, form in zip(self.get_forms_kwargs(step),
+                                     step.forms):
+            form_kwargs.update(kwargs)
+            f = form(**form_kwargs)
+            f.is_valid()  # trigger validation
+            forms.append(f)
+        return forms
 
-    def get_context_data(self, form, **kwargs):
+    def get_context_data(self, forms, **kwargs):
         """
         Returns the template context for a step. You can overwrite this method
         to add more data for all or some steps. This method returns a
@@ -377,7 +379,7 @@ class WizardMixin(object):
         """
         context = super(WizardMixin, self).get_context_data(**kwargs)
         context['wizard'] = {
-            'form': form,
+            'forms': forms,
             'steps': self.steps,
             'management_form': ManagementForm(prefix='mgmt', initial={
                 'current_step': self.steps.current.name,
@@ -387,12 +389,17 @@ class WizardMixin(object):
         }
         return context
 
-    def get_wizard_template_name(self):
-        return self.wizard_template_name
+    def get_wizard_template(self, step):
+        """
+        :param step: the step whose template to return
+        :type  step: ``Step`` object
+        :returns   : ``Template`` object
+        """
+        return get_template(self.wizard_step_templates.get(
+                step.name, self.wizard_template))
 
     def get_wizard_html(self, context):
-        template = get_template(self.get_wizard_template_name())
-        return template.render(context)
+        return self.get_wizard_template().render(context)
 
     # -- views ----------------------------------------------------------------
 
@@ -405,12 +412,12 @@ class WizardMixin(object):
             "method, which is required." % self.__class__.__name__)
 
 
-    def render(self, form=None):
+    def render(self, forms=None):
         """
         Returns a ``HttpResponse`` containing a all needed context data.
         """
-        form = form or self.get_form(step=self.steps.current)
-        context = self.get_context_data(form=form)
+        forms = forms or self.get_validated_step_forms(step=self.steps.current)
+        context = self.get_context_data(forms=forms)
         return self.render_to_response(context)
 
     def render_done(self):
@@ -421,23 +428,25 @@ class WizardMixin(object):
 
         If everything is fine call ``done``.
         """
-        validated_forms = SortedDict()
-        # walk through the form list and try to validate the data again.
-        for step_name in self.get_form_list():
-            step = self.storage[step_name]
-            form = self.get_form(step=step)
-            if not form.is_valid():
-                return self.render_revalidation_failure(step, form)
-            validated_forms[step_name] = form
+        valid_forms = SortedDict()
+        # ensure all the forms are valid
+        for step in self.steps:
+            forms = self.get_validated_step_forms(step=step)
+            if not all((form.is_valid() for form in forms)):
+                return self.render_revalidation_failure(step)
+            # flatten single item tuples into just the form
+            if len(forms) == 1:
+                forms = forms[0]
+            valid_forms[step.name] = forms
 
         # render the done view and reset the wizard before returning the
         # response. This is needed to prevent from rendering done with the
         # same data twice.
-        response = self.done(validated_forms)
+        response = self.done(valid_forms)
         self.storage.reset()
         return response
 
-    def render_revalidation_failure(self, step, form):
+    def render_revalidation_failure(self, step):
         """
         Gets called when a form doesn't validate when rendering the done
         view. By default, it changed the current step to failing forms step
@@ -445,11 +454,9 @@ class WizardMixin(object):
 
         :param step: the step that failed validation
         :type  step: ``Step`` object
-        :param form: the form that failed validation
-        :type  form: ``Form`` or ``FormSet`` object
         """
         self.storage.current_step = step
-        return self.render(form)
+        return self.render()
 
     def render_next_step(self):
         """
@@ -471,14 +478,14 @@ class NamedUrlWizardMixin(WizardMixin):
     """
     A WizardView with URL named steps support.
     """
-    wizard_done_step_name = None
+    wizard_done_step_slug = "finished"
 
     def get(self, request, *args, **kwargs):
         """
         This renders the form or, if needed, does the HTTP redirects.
         """
-        step_name = kwargs.get('step', None)
-        if step_name is None:
+        slug = kwargs.get('slug')
+        if not slug:
             if request.GET:
                 query_string = "?%s" % request.GET.urlencode()
             else:
@@ -486,18 +493,17 @@ class NamedUrlWizardMixin(WizardMixin):
             return redirect(self.steps.current.url + query_string)
 
         # is the current step the "done" name/view?
-        elif step_name == self.wizard_done_step_name:
+        if slug == self.wizard_done_step_slug:
             return self.render_done()
 
-        elif step_name in self.form_list:
-            step = self.storage[step_name]
+        step = self.steps.from_slug(slug)
+        if step:
             self.storage.current_step = step
-            return self.render(self.get_form(step))
+            return self.render(self.get_validated_step_forms(step))
 
         # invalid step name, reset to first and redirect.
-        else:
-            self.storage.current_step = self.steps.first
-            return redirect(self.steps.first.url)
+        self.storage.current_step = self.steps.first
+        return redirect(self.steps.first.url)
 
     def post(self, request, *args, **kwargs):
         """
@@ -505,10 +511,11 @@ class NamedUrlWizardMixin(WizardMixin):
         is super'd from FormWizard.
         """
         next_step_name = request.POST.get('wizard_next_step')
-        if next_step_name and next_step_name in self.get_form_list():
-            next_step = self.storage[next_step_name]
-            self.storage.current_step = next_step
-            return redirect(next_step.url)
+        if next_step_name:
+            next_step = self.steps[next_step_name]
+            if next_step:
+                self.storage.current_step = next_step
+                return redirect(next_step.url)
         return super(NamedUrlWizardMixin, self).post(request, *args, **kwargs)
 
     def get_step_url(self, **kwargs):
@@ -532,7 +539,7 @@ class NamedUrlWizardMixin(WizardMixin):
         class NamedUrlStep(Step):
             @property
             def url(self):
-                return wizard.get_step_url(step=self.name)
+                return wizard.get_step_url(slug=self.slug)
 
         storage = super(NamedUrlWizardMixin, self).get_storage()
         storage.step_class = NamedUrlStep
@@ -548,20 +555,21 @@ class NamedUrlWizardMixin(WizardMixin):
         # for any steps that don't have any form data, change it to a suitable
         # default
         # TODO: clean-up this, does it need to go in WizardMixin?
-        for step_name, form_class in self.get_form_list().iteritems():
-            step = self.storage[step_name]
+        for step in self.steps:
             if step.data is None:
                 step.data = {}
                 # if it's a formset, we need to create a plain management form
                 # to use as the step data, otherwise we'll get "ManagementForm
                 # data is missing or has been tampered with" error
-                if issubclass(form_class, formsets.BaseFormSet):
-                    management_form = self.get_form(step, data=None).management_form
-                    for key, value in management_form.initial.iteritems():
-                        step.data[management_form.add_prefix(key)] = value
+                validated_step_forms = self.get_validated_step_forms(step, data=None)  # cache
+                for i, form in enumerate(step.forms):
+                    if issubclass(form, BaseFormSet):
+                        management_form = validated_step_forms[i].management_form
+                        for key, value in management_form.initial.iteritems():
+                            step.data[management_form.add_prefix(key)] = value
         # Make sure we're on the right page.
-        if self.kwargs.get('step', None) != self.wizard_done_step_name:
-            return redirect(self.get_step_url(step=self.wizard_done_step_name))
+        if self.kwargs.get('slug') != self.wizard_done_step_slug:
+            return redirect(self.get_step_url(slug=self.wizard_done_step_slug))
         return super(NamedUrlWizardMixin, self).render_done()
 
     def render_next_step(self):
@@ -573,7 +581,7 @@ class NamedUrlWizardMixin(WizardMixin):
         self.storage.current_step = next_step
         return redirect(next_step.url)
 
-    def render_revalidation_failure(self, step, form):
+    def render_revalidation_failure(self, step):
         """
         When a step fails, we have to redirect the user to the first failing
         step.

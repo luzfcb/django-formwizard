@@ -20,28 +20,28 @@ class NamedUrlWizardTests(TestBase):
             self.user = User.objects.create(username='brad')
             self.datas = (
                 {
-                    'form-name': 'Pony',
-                    'form-thirsty': '2',
-                    'form-user': self.user.pk,
-                    'mgmt-current_step': 'form1',
+                    'form-0-name': 'Pony',
+                    'form-0-thirsty': '2',
+                    'form-0-user': self.user.pk,
+                    'mgmt-current_step': 'Step 1',
                 },
                 {
-                    'form-address1': '123 Main St',
-                    'form-address2': 'Djangoland',
-                    'form-file1': file1,
-                    'mgmt-current_step': 'form2',
+                    'form-0-address1': '123 Main St',
+                    'form-0-address2': 'Djangoland',
+                    'form-0-file1': file1,
+                    'mgmt-current_step': 'Step 2',
                 },
                 {
-                    'form-random_crap': 'blah blah',
-                    'mgmt-current_step': 'form3',
-                },
-                {
-                    'form-INITIAL_FORMS': '0',
-                    'form-TOTAL_FORMS': '2',
-                    'form-MAX_NUM_FORMS': '0',
                     'form-0-random_crap': 'blah blah',
-                    'form-1-random_crap': 'blah blah',
-                    'mgmt-current_step': 'form4',
+                    'mgmt-current_step': 'Step 3',
+                },
+                {
+                    'form-0-INITIAL_FORMS': '0',
+                    'form-0-TOTAL_FORMS': '2',
+                    'form-0-MAX_NUM_FORMS': '0',
+                    'form-0-0-random_crap': 'blah blah',
+                    'form-0-1-random_crap': 'blah blah',
+                    'mgmt-current_step': 'Step 4',
                 }
             )
             try:
@@ -57,17 +57,17 @@ class NamedUrlWizardTests(TestBase):
     def initial_request_should_work(self):
         response = self.client.get(self.url, follow=False)
         assert response.status_code == 302
-        assert response['Location'].endswith('/form1/')
+        assert response['Location'].endswith('/step-1/')
 
         response = self.client.get(response['Location'])
         steps = response.context['wizard']['steps']
-        assert steps.current.name == 'form1'
+        assert steps.current.name == 'Step 1'
         assert steps.index == 0
         assert steps.index0 == 0
         assert steps.index1 == 1
-        assert steps.last.name == 'form4'
+        assert steps.last.name == 'Step 4'
         assert steps.prev == None
-        assert steps.next.name == 'form2'
+        assert steps.next.name == 'Step 2'
         assert steps.count == 4
 
     @test
@@ -89,82 +89,85 @@ class NamedUrlWizardTests(TestBase):
             if k.endswith('current_step'):
                 invalid = {k: v}
                 break
-        url = reverse(self.url_name, kwargs={'step': 'form1'})
+        url = reverse(self.url_name, kwargs={'slug': 'step-1'})
         response = self.client.post(url, invalid)
 
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'form1'
-        assert response.context['wizard']['form'].errors == {
+        assert response.context['wizard']['steps'].current.name == 'Step 1'
+        (form, ) = response.context['wizard']['forms']
+        assert form.errors == {
             'name': [u'This field is required.'],
             'user': [u'This field is required.']
         }
 
     @test
     def posting_valid_data_should_redirect_to_next_step(self):
-        url = reverse(self.url_name, kwargs={'step': 'form1'})
+        url = reverse(self.url_name, kwargs={'slug': 'step-1'})
         response = self.client.post(url, self.datas[0])
         # follow redirect
         response = self.client.get(response['Location'])
         assert response.status_code == 200
 
         steps = response.context['wizard']['steps']
-        assert steps.current.name == 'form2'
+        assert steps.current.name == 'Step 2'
         assert steps.index == 1
-        assert steps.prev.name == 'form1'
-        assert steps.next.name == 'form3'
+        assert steps.prev.name == 'Step 1'
+        assert steps.next.name == 'Step 3'
 
     @test
     def should_be_able_to_step_to_specific_form(self):
-        url = reverse(self.url_name, kwargs={'step': 'form1'})
+        url = reverse(self.url_name, kwargs={'slug': 'step-1'})
         response = self.client.get(url)
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'form1'
+        assert response.context['wizard']['steps'].current.name == 'Step 1'
 
-        url = reverse(self.url_name, kwargs={'step': 'form1'})
+        url = reverse(self.url_name, kwargs={'slug': 'step-1'})
         response = self.client.post(url, self.datas[0])
         response = self.client.get(response['Location'])  # follow redirect
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'form2'
+        assert response.context['wizard']['steps'].current.name == 'Step 2'
 
         steps = response.context['wizard']['steps']
-        url = reverse(self.url_name, kwargs={'step': steps.current.name})
+        url = reverse(self.url_name, kwargs={'slug': steps.current.slug})
         response = self.client.post(url, {'wizard_next_step': steps.prev.name})
         response = self.client.get(response['Location'])
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'form1'
+        assert response.context['wizard']['steps'].current.name == 'Step 1'
 
     @test
     def test_form_finish(self):
-        url = reverse(self.url_name, kwargs={'step': 'form1'})
+        url = reverse(self.url_name, kwargs={'slug': 'step-1'})
         response = self.client.get(url)
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'form1'
+        assert response.context['wizard']['steps'].current.name == 'Step 1'
         steps = response.context['wizard']['steps']
 
-        url = reverse(self.url_name, kwargs={'step': steps.current.name})
+        url = reverse(self.url_name, kwargs={'slug': steps.current.slug})
         response = self.client.post(url, self.datas[0])
         response = self.client.get(response['Location'])
         steps = response.context['wizard']['steps']
         assert response.status_code == 200
-        assert steps.current.name == 'form2'
+        assert steps.current.name == 'Step 2'
 
-        url = reverse(self.url_name, kwargs={'step': steps.current.name})
+        url = reverse(self.url_name, kwargs={'slug': steps.current.slug})
         response = self.client.post(url, self.datas[1])
         response = self.client.get(response['Location'])
         steps = response.context['wizard']['steps']
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'form3'
+        assert response.context['wizard']['steps'].current.name == 'Step 3'
 
-        url = reverse(self.url_name, kwargs={'step': steps.current.name})
+        url = reverse(self.url_name, kwargs={'slug': steps.current.slug})
         response = self.client.post(url, self.datas[2])
         response = self.client.get(response['Location'])
         steps = response.context['wizard']['steps']
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'form4'
+        assert response.context['wizard']['steps'].current.name == 'Step 4'
 
-        url = reverse(self.url_name, kwargs={'step': steps.current.name})
+        url = reverse(self.url_name, kwargs={'slug': steps.current.slug})
         response = self.client.post(url, self.datas[3])
+        print response['Location']
         response = self.client.get(response['Location'])
+
         assert response.status_code == 200
 
         cleaned_datas = [f.cleaned_data
@@ -195,24 +198,24 @@ class NamedUrlWizardTests(TestBase):
 
     @test
     def test_manipulated_data(self):
-        url = reverse(self.url_name, kwargs={'step': 'form1'})
+        url = reverse(self.url_name, kwargs={'slug': 'step-1'})
         response = self.client.get(url)
         assert response.status_code == 200
         steps = response.context['wizard']['steps']
 
-        url = reverse(self.url_name, kwargs={'step': steps.current.name})
+        url = reverse(self.url_name, kwargs={'slug': steps.current.slug})
         response = self.client.post(url, self.datas[0])
         response = self.client.get(response['Location'])
         assert response.status_code == 200
         steps = response.context['wizard']['steps']
 
-        url = reverse(self.url_name, kwargs={'step': steps.current.name})
+        url = reverse(self.url_name, kwargs={'slug': steps.current.slug})
         response = self.client.post(url, self.datas[1])
         response = self.client.get(response['Location'])
         assert response.status_code == 200
         steps = response.context['wizard']['steps']
 
-        url = reverse(self.url_name, kwargs={'step': steps.current.name})
+        url = reverse(self.url_name, kwargs={'slug': steps.current.slug})
         response = self.client.post(url, self.datas[2])
         response = self.client.get(response['Location'])
         assert response.status_code == 200
@@ -221,11 +224,11 @@ class NamedUrlWizardTests(TestBase):
         self.client.cookies.pop('sessionid', None)
         self.client.cookies.pop('tests.app.views.namedurlwizard.CookieContactWizard|default', None)
 
-        url = reverse(self.url_name, kwargs={'step': steps.current.name})
+        url = reverse(self.url_name, kwargs={'slug': steps.current.slug})
         response = self.client.post(url, self.datas[3])  # redirects to done
         response = self.client.post(response['Location'], self.datas[3])  # redirects to step1
         assert response.status_code == 302
-        assert response['Location'] == 'http://testserver' + reverse(self.url_name, kwargs={'step': steps.first.name})
+        assert response['Location'] == 'http://testserver' + reverse(self.url_name, kwargs={'slug': steps.first.slug})
 
 
 class SessionTests(NamedUrlWizardTests):

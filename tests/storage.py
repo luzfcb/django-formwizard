@@ -114,8 +114,12 @@ def should_raise_exception_if_session_middleware_not_used():
         name = forms.CharField()
 
     class StepsWizardView(WizardView):
-        storage_name = 'formwizard.storage.SessionStorage'
-        form_list = (Step1, Step2)
+        storage = 'formwizard.storage.SessionStorage'
+        steps = (
+            ("Step 1", Step1),
+            ("Step 2", Step2),
+        )
+        template_name = 'simple.html'
 
     view = StepsWizardView.as_view()
     request = factory.get('/')

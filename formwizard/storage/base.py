@@ -1,5 +1,6 @@
 from __future__ import absolute_import, unicode_literals
 from django.core.files.uploadedfile import UploadedFile
+from django.template.defaultfilters import slugify
 from django.utils.encoding import smart_str
 from formwizard.storage.exceptions import NoFileStorageConfigured
 
@@ -14,11 +15,18 @@ class Step(object):
     :type   data: ``{"<field name>": "<raw value>", ...}``
     :param files: form files
     :type  files: ``{"<field name>": <UploadedFile object>, ...}``
+    :param forms: all the forms for the step
+    :type  forms: iterable
     """
-    def __init__(self, name, data=None, files=None):
+    def __init__(self, name, data=None, files=None, forms=None):
         self.name = name
         self.data = data
         self.files = files
+        self.forms = forms
+
+    @property
+    def slug(self):
+        return slugify(self.name)
 
 
 class Storage(object):
