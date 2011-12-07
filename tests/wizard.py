@@ -8,7 +8,8 @@ from django.core.urlresolvers import reverse
 from django.test.client import RequestFactory
 from django_attest import TestContext
 from formwizard.views import WizardView
-from .app.forms import Page1
+from .app.forms import Page1, PersonForm
+from .app.models import Person
 
 
 class WizardTests(TestBase):
@@ -258,3 +259,23 @@ def missing_storage_class_should_raise_improperly_configured():
     view = TestWizard.as_view()
     with Assert.raises(ImproperlyConfigured):
         view(factory.get('/'))
+
+
+@tests.test
+def get_forms_foo_should_support_single_item_return():
+    class TestWizard(WizardView):
+        storage = 'formwizard.storage.CookieStorage'
+        template_name = 'simple.html'
+        steps = (
+            ("Person", PersonForm),
+        )
+
+        def get_forms_instances(self, step):
+            return Person()
+
+        def get_forms_initials(self, step):
+            return {}
+
+    factory = RequestFactory()
+    view = TestWizard.as_view()
+    view(factory.get('/'))

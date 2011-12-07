@@ -326,7 +326,11 @@ class WizardMixin(object):
         """
         kwargss = []
         initials = self.get_forms_initials(step)
+        if not isinstance(initials, (list, tuple)):
+            initials = (initials, )
         instances = self.get_forms_instances(step)
+        if not isinstance(instances, (list, tuple)):
+            instances = (instances, )
         for i, form in enumerate(step.forms):
             kwargs = {
                 'data': step.data,

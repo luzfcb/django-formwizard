@@ -1,6 +1,7 @@
 from django import forms
 from django.forms.formsets import formset_factory
 from django.contrib.auth.models import User
+from .models import Person
 
 
 class Page1(forms.Form):
@@ -26,3 +27,8 @@ class Page3(forms.Form):
 
 
 Page4 = formset_factory(Page3, extra=2)
+
+
+class PersonForm(forms.ModelForm):
+    class Meta:
+        model = Person
