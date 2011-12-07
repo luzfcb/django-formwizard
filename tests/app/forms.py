@@ -9,6 +9,12 @@ class Page1(forms.Form):
     thirsty = forms.NullBooleanField()
 
 
+class Comment(forms.Form):
+    name = forms.CharField(max_length=100)
+    message = forms.CharField(max_length=200)
+
+Page1Comments = formset_factory(Comment, extra=2)
+
 class Page2(forms.Form):
     address1 = forms.CharField(max_length=100)
     address2 = forms.CharField(max_length=100)

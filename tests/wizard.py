@@ -25,6 +25,13 @@ class WizardTests(TestBase):
                     'form-0-name': 'Pony',
                     'form-0-thirsty': '2',
                     'form-0-user': self.user.pk,
+                    'form-1-0-name': 'Bradley Ayers',
+                    'form-1-0-message': 'Two forms on a single step is good.',
+                    'form-1-1-name': 'Sunny Phung',
+                    'form-1-1-message': 'I agree.',
+                    'form-1-INITIAL_FORMS': '0',
+                    'form-1-TOTAL_FORMS': '2',
+                    'form-1-MAX_NUM_FORMS': '0',
                     'mgmt-current_step': 'Step 1',
                 },
                 {
@@ -73,15 +80,15 @@ class WizardTests(TestBase):
     @test
     def posting_incomplete_data_should_return_form_errors(self):
         # create new data using 'current step'
+        data = {}
         for k, v in self.datas[0].iteritems():
-            if k.endswith('current_step'):
-                data = {k: v}
-                break
+            if k.startswith('mgmt-') or k.endswith('_FORMS'):
+                data[k] = v
         response = self.client.post(self.url, data)
         assert response.status_code == 200
         assert response.context['wizard']['steps'].current.name == 'Step 1'
-        (form, ) = response.context['wizard']['forms']
-        assert form.errors == {
+        (page1, comments) = response.context['wizard']['forms']
+        assert page1.errors == {
             'name': [u'This field is required.'],
             'user': [u'This field is required.']
         }
@@ -149,27 +156,26 @@ class WizardTests(TestBase):
         with open(__file__, 'rb') as f:
             assert forms['Step 2'].cleaned_data['file1'].read() == f.read()
 
-        merged_cleaned_data = {}
-        for step_name, form in forms.iteritems():
-            if isinstance(form.cleaned_data, list):
-                # formset
-                merged_cleaned_data.update({step_name: form.cleaned_data})
+        cleaned_datas = []
+        for fs in forms.itervalues():
+            if isinstance(fs, list):
+                cleaned_datas.append([f.cleaned_data for f in fs])
             else:
-                merged_cleaned_data.update(form.cleaned_data)
+                cleaned_datas.append(fs.cleaned_data)
+        del cleaned_datas[1]['file1']
 
-        del merged_cleaned_data['file1']
-        assert merged_cleaned_data == {
-            'name': 'Pony',
-            'thirsty': True,
-            'user': self.user,
-            'address1': '123 Main St',
-            'address2': 'Djangoland',
-            'random_crap': 'blah blah',
-            'Step 4': [
-                {'random_crap': 'blah blah'},
-                {'random_crap': 'blah blah'},
-            ]
-        }
+        assert cleaned_datas == [
+            [
+                {'name': 'Pony', 'thirsty': True, 'user': self.user},
+                [
+                    {'name': 'Bradley Ayers', 'message': 'Two forms on a single step is good.'},
+                    {'name': 'Sunny Phung', 'message': 'I agree.'},
+                ]
+            ],
+            {'address1': '123 Main St', 'address2': 'Djangoland'},
+            {'random_crap': 'blah blah'},
+            [{'random_crap': 'blah blah'}, {'random_crap': 'blah blah'}],
+        ]
 
     @test
     def clearing_data_should_revert_to_step1(self):

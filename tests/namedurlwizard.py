@@ -23,6 +23,13 @@ class NamedUrlWizardTests(TestBase):
                     'form-0-name': 'Pony',
                     'form-0-thirsty': '2',
                     'form-0-user': self.user.pk,
+                    'form-1-0-name': 'Bradley Ayers',
+                    'form-1-0-message': 'Two forms on a single step is good.',
+                    'form-1-1-name': 'Sunny Phung',
+                    'form-1-1-message': 'I agree.',
+                    'form-1-INITIAL_FORMS': '0',
+                    'form-1-TOTAL_FORMS': '2',
+                    'form-1-MAX_NUM_FORMS': '0',
                     'mgmt-current_step': 'Step 1',
                 },
                 {
@@ -85,17 +92,17 @@ class NamedUrlWizardTests(TestBase):
     @test
     def posting_invalid_form_data_should_render_errors(self):
         # create new data using 'current step'
+        data = {}
         for k, v in self.datas[0].iteritems():
-            if k.endswith('current_step'):
-                invalid = {k: v}
-                break
+            if k.startswith('mgmt-') or k.endswith('_FORMS'):
+                data[k] = v
         url = reverse(self.url_name, kwargs={'slug': 'step-1'})
-        response = self.client.post(url, invalid)
+        response = self.client.post(url, data)
 
         assert response.status_code == 200
         assert response.context['wizard']['steps'].current.name == 'Step 1'
-        (form, ) = response.context['wizard']['forms']
-        assert form.errors == {
+        (page1, comments) = response.context['wizard']['forms']
+        assert page1.errors == {
             'name': [u'This field is required.'],
             'user': [u'This field is required.']
         }
@@ -165,35 +172,31 @@ class NamedUrlWizardTests(TestBase):
 
         url = reverse(self.url_name, kwargs={'slug': steps.current.slug})
         response = self.client.post(url, self.datas[3])
-        print response['Location']
         response = self.client.get(response['Location'])
 
         assert response.status_code == 200
 
-        cleaned_datas = [f.cleaned_data
-                         for f in response.context['forms'].values()]
-
+        cleaned_datas = []
+        for fs in response.context['forms'].itervalues():
+            if isinstance(fs, list):
+                cleaned_datas.append([f.cleaned_data for f in fs])
+            else:
+                cleaned_datas.append(fs.cleaned_data)
         # it's difficult to check equality of UploadedFile objects, so we'll
         # just remove it.
-        cleaned_datas[1].pop('file1')
+        del cleaned_datas[1]['file1']
 
         assert cleaned_datas == [
-            {
-                'name': 'Pony',
-                'thirsty': True,
-                'user': self.user,
-            },
-            {
-                'address1': '123 Main St',
-                'address2': 'Djangoland',
-            },
-            {
-                'random_crap': 'blah blah'
-            },
             [
-                {'random_crap': 'blah blah'},
-                {'random_crap': 'blah blah'},
-            ]
+                {'name': 'Pony', 'thirsty': True, 'user': self.user},
+                [
+                    {'name': 'Bradley Ayers', 'message': 'Two forms on a single step is good.'},
+                    {'name': 'Sunny Phung', 'message': 'I agree.'},
+                ]
+            ],
+            {'address1': '123 Main St', 'address2': 'Djangoland'},
+            {'random_crap': 'blah blah'},
+            [{'random_crap': 'blah blah'}, {'random_crap': 'blah blah'}],
         ]
 
     @test
@@ -242,102 +245,3 @@ class CookieTests(NamedUrlWizardTests):
 
 
 tests = Tests([SessionTests(), CookieTests()])
-
-
-#
-#class NamedSessionWizardTests(NamedWizardTests, TestCase):
-#    wizard_urlname = 'nwiz_session'
-#    wizard_step_1_data = {
-#        'session_contact_wizard-current_step': 'form1',
-#    }
-#    wizard_step_data = (
-#        {
-#            'form1-name': 'Pony',
-#            'form1-thirsty': '2',
-#            'session_contact_wizard-current_step': 'form1',
-#        },
-#        {
-#            'form2-address1': '123 Main St',
-#            'form2-address2': 'Djangoland',
-#            'session_contact_wizard-current_step': 'form2',
-#        },
-#        {
-#            'form3-random_crap': 'blah blah',
-#            'session_contact_wizard-current_step': 'form3',
-#        },
-#        {
-#            'form4-INITIAL_FORMS': '0',
-#            'form4-TOTAL_FORMS': '2',
-#            'form4-MAX_NUM_FORMS': '0',
-#            'form4-0-random_crap': 'blah blah',
-#            'form4-1-random_crap': 'blah blah',
-#            'session_contact_wizard-current_step': 'form4',
-#        }
-#    )
-#
-#class NamedCookieWizardTests(NamedWizardTests, TestCase):
-#    wizard_urlname = 'nwiz_cookie'
-#    wizard_step_1_data = {
-#        'cookie_contact_wizard-current_step': 'form1',
-#    }
-#    wizard_step_data = (
-#        {
-#            'form1-name': 'Pony',
-#            'form1-thirsty': '2',
-#            'cookie_contact_wizard-current_step': 'form1',
-#        },
-#        {
-#            'form2-address1': '123 Main St',
-#            'form2-address2': 'Djangoland',
-#            'cookie_contact_wizard-current_step': 'form2',
-#        },
-#        {
-#            'form3-random_crap': 'blah blah',
-#            'cookie_contact_wizard-current_step': 'form3',
-#        },
-#        {
-#            'form4-INITIAL_FORMS': '0',
-#            'form4-TOTAL_FORMS': '2',
-#            'form4-MAX_NUM_FORMS': '0',
-#            'form4-0-random_crap': 'blah blah',
-#            'form4-1-random_crap': 'blah blah',
-#            'cookie_contact_wizard-current_step': 'form4',
-#        }
-#    )
-#
-#
-#class NamedFormTests(object):
-#    urls = 'formwizard.tests.namedwizardtests.urls'
-#
-#    def test_revalidation(self):
-#        request = get_request()
-#
-#        testform = self.formwizard_class.as_view(
-#            [('start', Step1), ('step2', Step2)],
-#            url_name=self.wizard_urlname)
-#        response, instance = testform(request, step='done')
-#
-#        instance.render_done(None)
-#        self.assertEqual(instance.storage.current_step, 'start')
-#
-#class TestNamedUrlSessionFormWizard(NamedUrlSessionWizardView):
-#
-#    def dispatch(self, request, *args, **kwargs):
-#        response = super(TestNamedUrlSessionFormWizard, self).dispatch(request, *args, **kwargs)
-#        return response, self
-#
-#class TestNamedUrlCookieFormWizard(NamedUrlCookieWizardView):
-#
-#    def dispatch(self, request, *args, **kwargs):
-#        response = super(TestNamedUrlCookieFormWizard, self).dispatch(request, *args, **kwargs)
-#        return response, self
-#
-#
-#class NamedSessionFormTests(NamedFormTests, TestCase):
-#    formwizard_class = TestNamedUrlSessionFormWizard
-#    wizard_urlname = 'nwiz_session'
-#
-#
-#class NamedCookieFormTests(NamedFormTests, TestCase):
-#    formwizard_class = TestNamedUrlCookieFormWizard
-#    wizard_urlname = 'nwiz_cookie'
