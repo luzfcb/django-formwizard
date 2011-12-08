@@ -353,8 +353,10 @@ class WizardMixin(object):
         Returns validated form objects for the given *step*.
         """
         forms = []
-        for form_kwargs, form in zip(self.get_forms_kwargs(step),
-                                     step.forms):
+        kwargss = self.get_forms_kwargs(step)
+        if not isinstance(kwargss, (list, tuple)):
+            kwargss = (kwargss, )
+        for form_kwargs, form in zip(kwargss, step.forms):
             form_kwargs.update(kwargs)
             f = form(**form_kwargs)
             f.is_valid()  # trigger validation

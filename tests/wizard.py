@@ -270,12 +270,19 @@ def get_forms_foo_should_support_single_item_return():
             ("Person", PersonForm),
         )
 
+    class InstancesTestWizard(TestWizard):
         def get_forms_instances(self, step):
             return Person()
 
+    class InitialsTestWizard(TestWizard):
         def get_forms_initials(self, step):
             return {}
 
-    factory = RequestFactory()
-    view = TestWizard.as_view()
-    view(factory.get('/'))
+    class KwargsTestWizard(TestWizard):
+        def get_forms_kwargs(self, step):
+            return {}
+
+    for cls in (InstancesTestWizard, InitialsTestWizard, KwargsTestWizard):
+        factory = RequestFactory()
+        view = cls.as_view()
+        view(factory.get('/'))
