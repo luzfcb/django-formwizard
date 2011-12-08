@@ -259,30 +259,3 @@ def missing_storage_class_should_raise_improperly_configured():
     view = TestWizard.as_view()
     with Assert.raises(ImproperlyConfigured):
         view(factory.get('/'))
-
-
-@tests.test
-def get_forms_foo_should_support_single_item_return():
-    class TestWizard(WizardView):
-        storage = 'formwizard.storage.CookieStorage'
-        template_name = 'simple.html'
-        steps = (
-            ("Person", PersonForm),
-        )
-
-    class InstancesTestWizard(TestWizard):
-        def get_forms_instances(self, step):
-            return Person()
-
-    class InitialsTestWizard(TestWizard):
-        def get_forms_initials(self, step):
-            return {}
-
-    class KwargsTestWizard(TestWizard):
-        def get_forms_kwargs(self, step):
-            return {}
-
-    for cls in (InstancesTestWizard, InitialsTestWizard, KwargsTestWizard):
-        factory = RequestFactory()
-        view = cls.as_view()
-        view(factory.get('/'))

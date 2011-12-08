@@ -302,8 +302,7 @@ class WizardMixin(object):
         """
         Returns the initial data to pass to the forms for *step*.
 
-        :rtype: tuple with same length as number of forms for *step*, or a
-                single item that will be automatically wrapped in a tuple.
+        :rtype: iterable with same length as number of forms for *step*
         """
         return (None, ) * len(step.forms)
 
@@ -311,8 +310,7 @@ class WizardMixin(object):
         """
         Returns the model instances to pass to the forms for *step*.
 
-        :rtype: tuple with same length as number of forms for *step*, or a
-                single item that will be automatically wrapped in a tuple.
+        :rtype: iterable with same length as number of forms for *step*
         """
         return (None, ) * len(step.forms)
 
@@ -324,16 +322,11 @@ class WizardMixin(object):
         This is useful if a specific form needs some extra constructor
         arguments, e.g. a form that requires the HTTP request.
 
-        :rtype: tuple with same length as number of forms for *step*, or a
-                single item that will be automatically wrapped in a tuple.
+        :rtype: iterable with same length as number of forms for *step*
         """
         kwargss = []
         initials = self.get_forms_initials(step)
-        if not isinstance(initials, tuple):
-            initials = (initials, )
         instances = self.get_forms_instances(step)
-        if not isinstance(instances, tuple):
-            instances = (instances, )
         for i, form in enumerate(step.forms):
             kwargs = {
                 'data': step.data,
@@ -349,7 +342,7 @@ class WizardMixin(object):
                 # available.
                 kwargs['queryset'] = instances[i]
             kwargss.append(kwargs)
-        return tuple(kwargss)
+        return kwargss
 
     def get_validated_step_forms(self, step, **kwargs):
         """
@@ -357,8 +350,6 @@ class WizardMixin(object):
         """
         forms = []
         kwargss = self.get_forms_kwargs(step)
-        if not isinstance(kwargss, tuple):
-            kwargss = (kwargss, )
         for form_kwargs, form in zip(kwargss, step.forms):
             form_kwargs.update(kwargs)
             f = form(**form_kwargs)
