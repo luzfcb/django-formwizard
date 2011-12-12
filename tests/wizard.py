@@ -155,15 +155,12 @@ class WizardTests(TestBase):
 
         forms = response.context['forms']
         with open(__file__, 'rb') as f:
-            assert forms['Step 2'].cleaned_data['file1'].read() == f.read()
+            assert forms['Step 2'][0].cleaned_data['file1'].read() == f.read()
 
         cleaned_datas = []
         for fs in forms.itervalues():
-            if isinstance(fs, list):
-                cleaned_datas.append([f.cleaned_data for f in fs])
-            else:
-                cleaned_datas.append(fs.cleaned_data)
-        del cleaned_datas[1]['file1']
+            cleaned_datas.append([f.cleaned_data for f in fs])
+        del cleaned_datas[1][0]['file1']
 
         assert cleaned_datas == [
             [
@@ -173,9 +170,15 @@ class WizardTests(TestBase):
                     {'name': 'Sunny Phung', 'message': 'I agree.'},
                 ]
             ],
-            {'address1': '123 Main St', 'address2': 'Djangoland'},
-            {'random_crap': 'blah blah'},
-            [{'random_crap': 'blah blah'}, {'random_crap': 'blah blah'}],
+            [
+                {'address1': '123 Main St', 'address2': 'Djangoland'}
+            ],
+            [
+                {'random_crap': 'blah blah'}
+            ],
+            [
+                [{'random_crap': 'blah blah'}, {'random_crap': 'blah blah'}],
+            ],
         ]
 
     @test

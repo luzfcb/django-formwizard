@@ -4,6 +4,7 @@ from attest import Tests, TestBase, test
 from contextlib import contextmanager
 from django.contrib.auth.models import User
 from django.core.urlresolvers import reverse
+from django.forms.formsets import BaseFormSet
 from django.http import QueryDict
 from django_attest import TestContext
 
@@ -178,13 +179,10 @@ class NamedUrlWizardTests(TestBase):
 
         cleaned_datas = []
         for fs in response.context['forms'].itervalues():
-            if isinstance(fs, list):
-                cleaned_datas.append([f.cleaned_data for f in fs])
-            else:
-                cleaned_datas.append(fs.cleaned_data)
+            cleaned_datas.append([f.cleaned_data for f in fs])
         # it's difficult to check equality of UploadedFile objects, so we'll
         # just remove it.
-        del cleaned_datas[1]['file1']
+        del cleaned_datas[1][0]['file1']
 
         assert cleaned_datas == [
             [
@@ -194,9 +192,15 @@ class NamedUrlWizardTests(TestBase):
                     {'name': 'Sunny Phung', 'message': 'I agree.'},
                 ]
             ],
-            {'address1': '123 Main St', 'address2': 'Djangoland'},
-            {'random_crap': 'blah blah'},
-            [{'random_crap': 'blah blah'}, {'random_crap': 'blah blah'}],
+            [
+                {'address1': '123 Main St', 'address2': 'Djangoland'}
+            ],
+            [
+                {'random_crap': 'blah blah'}
+            ],
+            [
+                [{'random_crap': 'blah blah'}, {'random_crap': 'blah blah'}],
+            ],
         ]
 
     @test

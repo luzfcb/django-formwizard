@@ -196,7 +196,7 @@ class WizardMixin(object):
                                     % (form, view))
 
         # build the kwargs for the formwizard instances
-        kwargs.setdefault('wizard_step_templates', {})
+        kwargs.setdefault('wizard_step_templates', cls.wizard_step_templates or {})
         kwargs['forms'] = forms_dict
         return super(WizardMixin, cls).as_view(*args, **kwargs)
 
