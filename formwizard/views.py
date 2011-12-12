@@ -14,7 +14,17 @@ from django.utils.decorators import classonlymethod
 from formwizard.storage import get_storage, Step
 from formwizard.storage.exceptions import NoFileStorageConfigured
 from formwizard.forms import ManagementForm
+import operator
 import re
+
+
+class Wizard(object):
+    """
+    The wizard object in the template context.
+    """
+    def __init__(self, **kwargs):
+        for name, value in kwargs.iteritems():
+            setattr(self, name, value)
 
 
 class StepsManager(object):
@@ -70,7 +80,13 @@ class StepsManager(object):
         Returns the current step. If no current step is stored in the
         storage backend, the first step will be returned.
         """
-        return self._wizard.storage.current_step or self.first
+        if self._wizard.storage.current_step:
+            return self[self._wizard.storage.current_step.name]
+        return self.first
+
+    @current.setter
+    def current(self, step):
+        self._wizard.storage.current_step = step
 
     @property
     def first(self):
@@ -95,12 +111,11 @@ class StepsManager(object):
         return None
 
     @property
-    def prev(self):
+    def previous(self):
         "Returns the previous step."
         key = self.index - 1
-        forms = self._wizard.get_forms()
         if key >= 0:
-            return self[forms.keyOrder[key]]
+            return self[self._wizard.get_forms().keyOrder[key]]
         return None
 
     @property
@@ -275,15 +290,13 @@ class WizardMixin(object):
                 return self.render(forms)
 
         # Check if form was refreshed
-        validation_error = ValidationError(
-                'ManagementForm data is missing or has been tampered.')
         management_form = ManagementForm(self.request.POST, prefix='mgmt')
         if not management_form.is_valid():
-            raise validation_error
+            raise ValidationError('ManagementForm data is missing or has been tampered.')
         try:
             step = self.steps[management_form.cleaned_data['current_step']]
         except KeyError:
-            raise validation_error
+            raise ValidationError("The current step specified in Wizard management form is invalid.")
         self.storage.current_step = step
         forms = self.get_validated_step_forms(step,
                                               data=self.request.POST,
@@ -378,15 +391,16 @@ class WizardMixin(object):
 
         """
         context = super(WizardMixin, self).get_context_data(**kwargs)
-        context['wizard'] = {
-            'forms': forms,
-            'steps': self.steps,
-            'management_form': ManagementForm(prefix='mgmt', initial={
+        context['wizard'] = Wizard(
+            forms=forms,
+            steps=self.steps,
+            management_form=ManagementForm(prefix='mgmt', initial={
                 'current_step': self.steps.current.name,
             }),
-            'as_html': lambda: self.get_wizard_html(
-                    RequestContext(self.request, context))
-        }
+            as_html=lambda: self.get_wizard_html(
+                    RequestContext(self.request, context)),
+            media=reduce(operator.add, (form.media for form in forms)),
+        )
         return context
 
     def get_wizard_template(self, step):
@@ -399,7 +413,7 @@ class WizardMixin(object):
                 step.name, self.wizard_template))
 
     def get_wizard_html(self, context):
-        return self.get_wizard_template().render(context)
+        return self.get_wizard_template(self.steps.current).render(context)
 
     # -- views ----------------------------------------------------------------
 
@@ -434,9 +448,6 @@ class WizardMixin(object):
             forms = self.get_validated_step_forms(step=step)
             if not all((form.is_valid() for form in forms)):
                 return self.render_revalidation_failure(step)
-            # flatten single item tuples into just the form
-            if len(forms) == 1:
-                forms = forms[0]
             valid_forms[step.name] = forms
 
         # render the done view and reset the wizard before returning the

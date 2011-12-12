@@ -17,8 +17,7 @@ class ContactWizard(WizardView):
     def get_context_data(self, **kwargs):
         context = super(ContactWizard, self).get_context_data(**kwargs)
         context['view'] = self
-        if self.steps.current.name == 'Step 2':
-            context.update({'another_var': True})
+        context['is_step_2'] = self.steps.current.name == 'Step 2'
         return context
 
 

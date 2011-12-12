@@ -27,9 +27,25 @@ as_view = Tests()
 class Step1(forms.Form):
     name = forms.CharField()
 
+    class Media:
+        css = {
+            'screen': ('step1.css',),
+        }
+        js = (
+            'step1.js',
+        )
+
 
 class Step2(forms.Form):
     name = forms.CharField()
+
+    class Media:
+        css = {
+            'screen': ('step2.css',),
+        }
+        js = (
+            'step2.js',
+        )
 
 
 class Step3(forms.Form):
@@ -136,6 +152,33 @@ def render_done_performs_validation():
     assert instance.storage.current_step.name == 'Step 1'
 
 
+@steps.test
+def steps_manager_always_populates_step_forms():
+    class TestWizardView(DispatchHookMixin, WizardView):
+        storage = 'formwizard.storage.dummy.DummyStorage'
+        template_name = 'simple.html'
+        steps = (
+            ("Step 1", Step1),
+            ("Step 2", Step2),
+            ("Step 3", Step3),
+        )
+
+    view = TestWizardView.as_view()
+    request = factory.get('/')
+    instance = view(request)
+    # Change step to the second, so that we have both 'previous' and 'next'
+    # steps. It's important to get a 'raw' step (one that has no forms) via
+    # ``instance.storage[...]`` to ensure that ``steps.current`` properly
+    # configures the ``forms`` attribute.
+    instance.steps.current = instance.storage['Step 2']
+    assert instance.steps.first.forms
+    assert instance.steps.last.forms
+    assert instance.steps.next.forms
+    assert instance.steps.previous.forms
+    assert instance.steps.current.forms
+    assert [f.forms for f in instance.steps.all]
+
+
 formsets = Tests()
 
 
@@ -203,4 +246,45 @@ def formsets_should_be_validated():
     assert formset.non_form_errors() == ['Expected error']
 
 
-tests = Tests((as_view, formsets, steps))
+media = Tests()
+
+
+@media.test
+def wizard_object_in_template_should_contain_media():
+    class TestWizardView(DispatchHookMixin, WizardView):
+        storage = 'formwizard.storage.dummy.DummyStorage'
+        template_name = 'simple.html'
+        steps = (
+            ("Step 1", Step1),
+        )
+
+    view = TestWizardView.as_view()
+    request = factory.get('/')
+    instance = view(request)
+    forms = instance.get_validated_step_forms(instance.steps.current)
+    context = instance.get_context_data(forms)
+    assert unicode(context['wizard'].media['js'])  == '<script type="text/javascript" src="step1.js"></script>'
+    assert unicode(context['wizard'].media['css']) == '<link href="step1.css" type="text/css" media="screen" rel="stylesheet" />'
+
+    # test combined media
+    class TestWizardView(DispatchHookMixin, WizardView):
+        storage = 'formwizard.storage.dummy.DummyStorage'
+        template_name = 'simple.html'
+        steps = (
+            ("Combined", (Step1, Step2)),
+        )
+
+    view = TestWizardView.as_view()
+    request = factory.get('/')
+    instance = view(request)
+    forms = instance.get_validated_step_forms(instance.steps.current)
+    context = instance.get_context_data(forms)
+    assert unicode(context['wizard'].media['js']) == (
+        '<script type="text/javascript" src="step1.js"></script>\n'
+        '<script type="text/javascript" src="step2.js"></script>')
+    assert unicode(context['wizard'].media['css']) == (
+        '<link href="step1.css" type="text/css" media="screen" rel="stylesheet" />\n'
+        '<link href="step2.css" type="text/css" media="screen" rel="stylesheet" />')
+
+
+tests = Tests((as_view, formsets, media, steps))

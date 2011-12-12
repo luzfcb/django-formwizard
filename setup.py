@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='django-formwizard',
-    version='1.3.5',
+    version='1.3.6',
     description='A FormWizard for Django with multiple storage backends',
     long_description=open("README.rst").read(),
     author='Bradley Ayers',

@@ -67,13 +67,13 @@ class NamedUrlWizardTests(TestBase):
         assert response['Location'].endswith('/step-1/')
 
         response = self.client.get(response['Location'])
-        steps = response.context['wizard']['steps']
+        steps = response.context['wizard'].steps
         assert steps.current.name == 'Step 1'
         assert steps.index == 0
         assert steps.index0 == 0
         assert steps.index1 == 1
         assert steps.last.name == 'Step 4'
-        assert steps.prev == None
+        assert steps.previous == None
         assert steps.next.name == 'Step 2'
         assert steps.count == 4
 
@@ -100,8 +100,8 @@ class NamedUrlWizardTests(TestBase):
         response = self.client.post(url, data)
 
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'Step 1'
-        (page1, comments) = response.context['wizard']['forms']
+        assert response.context['wizard'].steps.current.name == 'Step 1'
+        (page1, comments) = response.context['wizard'].forms
         assert page1.errors == {
             'name': [u'This field is required.'],
             'user': [u'This field is required.']
@@ -115,10 +115,10 @@ class NamedUrlWizardTests(TestBase):
         response = self.client.get(response['Location'])
         assert response.status_code == 200
 
-        steps = response.context['wizard']['steps']
+        steps = response.context['wizard'].steps
         assert steps.current.name == 'Step 2'
         assert steps.index == 1
-        assert steps.prev.name == 'Step 1'
+        assert steps.previous.name == 'Step 1'
         assert steps.next.name == 'Step 3'
 
     @test
@@ -126,49 +126,49 @@ class NamedUrlWizardTests(TestBase):
         url = reverse(self.url_name, kwargs={'slug': 'step-1'})
         response = self.client.get(url)
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'Step 1'
+        assert response.context['wizard'].steps.current.name == 'Step 1'
 
         url = reverse(self.url_name, kwargs={'slug': 'step-1'})
         response = self.client.post(url, self.datas[0])
         response = self.client.get(response['Location'])  # follow redirect
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'Step 2'
+        assert response.context['wizard'].steps.current.name == 'Step 2'
 
-        steps = response.context['wizard']['steps']
+        steps = response.context['wizard'].steps
         url = reverse(self.url_name, kwargs={'slug': steps.current.slug})
-        response = self.client.post(url, {'wizard_next_step': steps.prev.name})
+        response = self.client.post(url, {'wizard_next_step': steps.previous.name})
         response = self.client.get(response['Location'])
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'Step 1'
+        assert response.context['wizard'].steps.current.name == 'Step 1'
 
     @test
     def test_form_finish(self):
         url = reverse(self.url_name, kwargs={'slug': 'step-1'})
         response = self.client.get(url)
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'Step 1'
-        steps = response.context['wizard']['steps']
+        assert response.context['wizard'].steps.current.name == 'Step 1'
+        steps = response.context['wizard'].steps
 
         url = reverse(self.url_name, kwargs={'slug': steps.current.slug})
         response = self.client.post(url, self.datas[0])
         response = self.client.get(response['Location'])
-        steps = response.context['wizard']['steps']
+        steps = response.context['wizard'].steps
         assert response.status_code == 200
         assert steps.current.name == 'Step 2'
 
         url = reverse(self.url_name, kwargs={'slug': steps.current.slug})
         response = self.client.post(url, self.datas[1])
         response = self.client.get(response['Location'])
-        steps = response.context['wizard']['steps']
+        steps = response.context['wizard'].steps
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'Step 3'
+        assert response.context['wizard'].steps.current.name == 'Step 3'
 
         url = reverse(self.url_name, kwargs={'slug': steps.current.slug})
         response = self.client.post(url, self.datas[2])
         response = self.client.get(response['Location'])
-        steps = response.context['wizard']['steps']
+        steps = response.context['wizard'].steps
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'Step 4'
+        assert response.context['wizard'].steps.current.name == 'Step 4'
 
         url = reverse(self.url_name, kwargs={'slug': steps.current.slug})
         response = self.client.post(url, self.datas[3])
@@ -204,25 +204,25 @@ class NamedUrlWizardTests(TestBase):
         url = reverse(self.url_name, kwargs={'slug': 'step-1'})
         response = self.client.get(url)
         assert response.status_code == 200
-        steps = response.context['wizard']['steps']
+        steps = response.context['wizard'].steps
 
         url = reverse(self.url_name, kwargs={'slug': steps.current.slug})
         response = self.client.post(url, self.datas[0])
         response = self.client.get(response['Location'])
         assert response.status_code == 200
-        steps = response.context['wizard']['steps']
+        steps = response.context['wizard'].steps
 
         url = reverse(self.url_name, kwargs={'slug': steps.current.slug})
         response = self.client.post(url, self.datas[1])
         response = self.client.get(response['Location'])
         assert response.status_code == 200
-        steps = response.context['wizard']['steps']
+        steps = response.context['wizard'].steps
 
         url = reverse(self.url_name, kwargs={'slug': steps.current.slug})
         response = self.client.post(url, self.datas[2])
         response = self.client.get(response['Location'])
         assert response.status_code == 200
-        steps = response.context['wizard']['steps']
+        steps = response.context['wizard'].steps
 
         self.client.cookies.pop('sessionid', None)
         self.client.cookies.pop('tests.app.views.namedurlwizard.CookieContactWizard|default', None)

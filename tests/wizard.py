@@ -68,13 +68,13 @@ class WizardTests(TestBase):
         response = self.client.get(self.url)
         assert response.status_code == 200
 
-        steps = response.context['wizard']['steps']
+        steps = response.context['wizard'].steps
         assert steps.current.name == 'Step 1'
         assert steps.index == 0
         assert steps.index0 == 0
         assert steps.index1 == 1
         assert steps.last.name == 'Step 4'
-        assert steps.prev == None
+        assert steps.previous == None
         assert steps.next.name == 'Step 2'
         assert steps.count == 4
 
@@ -87,8 +87,8 @@ class WizardTests(TestBase):
                 data[k] = v
         response = self.client.post(self.url, data)
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'Step 1'
-        (page1, comments) = response.context['wizard']['forms']
+        assert response.context['wizard'].steps.current.name == 'Step 1'
+        (page1, comments) = response.context['wizard'].forms
         assert page1.errors == {
             'name': [u'This field is required.'],
             'user': [u'This field is required.']
@@ -99,39 +99,39 @@ class WizardTests(TestBase):
         response = self.client.post(self.url, self.datas[0])
         assert response.status_code == 200
 
-        steps = response.context['wizard']['steps']
+        steps = response.context['wizard'].steps
         assert steps.current.name == 'Step 2'
         assert steps.index0 == 1
-        assert steps.prev.name == 'Step 1'
+        assert steps.previous.name == 'Step 1'
         assert steps.next.name == 'Step 3'
 
     @test
     def should_allow_jumping_between_steps(self):
         response = self.client.get(self.url)
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'Step 1'
+        assert response.context['wizard'].steps.current.name == 'Step 1'
 
         response = self.client.post(self.url, self.datas[0])
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'Step 2'
+        assert response.context['wizard'].steps.current.name == 'Step 2'
 
         response = self.client.post(self.url, {
-            'wizard_next_step': response.context['wizard']['steps'].prev.name
+            'wizard_next_step': response.context['wizard'].steps.previous.name
         })
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'Step 1'
+        assert response.context['wizard'].steps.current.name == 'Step 1'
 
     @test
     def should_have_extra_template_context_in_subclass(self):
         response = self.client.get(self.url)
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'Step 1'
-        assert response.context.get('another_var') == None
+        assert response.context['wizard'].steps.current.name == 'Step 1'
+        assert response.context['is_step_2'] == False
 
         response = self.client.post(self.url, self.datas[0])
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'Step 2'
-        assert response.context.get('another_var') == True
+        assert response.context['wizard'].steps.current.name == 'Step 2'
+        assert response.context['is_step_2'] == True
 
     @test
     def test_cleaned_forms_from_completed_wizard(self):
@@ -199,37 +199,37 @@ class WizardTests(TestBase):
 
         response = self.client.post(self.url, self.datas[3])
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'Step 1'
+        assert response.context['wizard'].steps.current.name == 'Step 1'
 
 
     @test
     def resubmitting_a_form_shouldnt_break_things(self):
         response = self.client.get(self.url)
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'Step 1'
+        assert response.context['wizard'].steps.current.name == 'Step 1'
 
         # post correct data, should proceed to step 2
         response = self.client.post(self.url, self.datas[0])
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'Step 2'
+        assert response.context['wizard'].steps.current.name == 'Step 2'
 
         # post same data, this is essentially a 'browser refresh'
         response = self.client.post(self.url, self.datas[0])
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'Step 2'
+        assert response.context['wizard'].steps.current.name == 'Step 2'
 
         # post valid data for the second step
         response = self.client.post(self.url, self.datas[1])
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'Step 3'
+        assert response.context['wizard'].steps.current.name == 'Step 3'
 
         response = self.client.post(self.url, self.datas[2])
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'Step 4'
+        assert response.context['wizard'].steps.current.name == 'Step 4'
 
         response = self.client.post(self.url, self.datas[0])
         assert response.status_code == 200
-        assert response.context['wizard']['steps'].current.name == 'Step 2'
+        assert response.context['wizard'].steps.current.name == 'Step 2'
 
         response = self.client.post(self.url, self.datas[3])
         assert response.status_code == 200
