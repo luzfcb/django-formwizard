@@ -93,6 +93,9 @@ class Storage(object):
             self.steps[name] = self.step_class(name)
         return self.steps[name]
 
+    def __contains__(self, name):
+        return name in self.steps
+
     def _decode_files(self, files):
         """
         Helper method that when given *files* -- a ``dict`` with the

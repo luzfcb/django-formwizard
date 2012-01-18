@@ -85,7 +85,7 @@ def should_encode_and_decode_properly(temp):
     restored.decode(storage.encode())
     assert storage.encode() == restored.encode()
 
-    with open(__file__, 'rb')as f:
+    with open(__file__, 'rb') as f:
         expected = f.read()
 
     step = storage['step1']
@@ -100,6 +100,18 @@ def should_encode_and_decode_properly(temp):
     restored_step = restored['step1']
     actual = restored_step.files['file1'].read()
     assert actual == expected
+
+
+@core.test
+def should_support_in_operator():
+    storage = Storage('name', 'namespace')
+    step = storage['some step']
+    assert 'some step' in storage
+
+    # ensure it works across restore
+    restored = Storage('name', 'namespace')
+    restored.decode(storage.encode())
+    assert 'some step' in restored
 
 
 session = Tests()
