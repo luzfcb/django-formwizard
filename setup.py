@@ -14,8 +14,8 @@ setup(
     include_package_data=True,  # declarations in MANIFEST.in
 
     install_requires=['Django >=1.3'],
-    tests_require=['Django >=1.3', 'Attest >=0.5', 'django-attest >=0.2.2',
-                   'unittest-xml-reporting'],
+    tests_require=['Django >=1.3', 'Attest >=0.5.3', 'django-attest >=0.2.2',
+                   'unittest-xml-reporting', 'pylint'],
 
     test_loader='tests:loader',
     test_suite='tests.everything',
