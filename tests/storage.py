@@ -11,6 +11,7 @@ from django.contrib.sessions.backends.db import SessionStore
 from django import forms
 from django.http import HttpResponse
 from django.test.client import RequestFactory
+from django.utils.datastructures import MultiValueDict
 from django_attest import TestContext
 from formwizard.models import WizardState
 from formwizard.storage import (CookieStorage, DatabaseStorage, DummyStorage,
@@ -181,6 +182,35 @@ def should_completely_remove_data_from_session_when_deleted():
     assert 'namespace|name' not in request.session
 
 
+@session.test
+def should_store_multi_value_dict_values_as_lists():
+    # Create a request and store a MultiValueDict (what you would expect from
+    # actual POST/FILES data in Django)
+    middleware = SessionMiddleware()
+    request, response = factory.get('/'), HttpResponse('')
+    middleware.process_request(request)
+    storage = SessionStorage('name', 'namespace')
+    storage.process_request(request)
+    step = storage['step']
+    step.data = MultiValueDict({"single": ["value0"],
+                                "double": ["value1", "value2"]})
+    storage.process_response(response)
+    middleware.process_response(request, response)
+
+    # Retrieve the stored data, and ensure it's still a MultiValueDict
+    request = factory.get('/')
+    request.COOKIES.update(((k, v.value)
+                            for k, v in response.cookies.iteritems()))
+    middleware.process_request(request)
+    # Create a fresh storage to load data from the request
+    storage = SessionStorage('name', 'namespace')
+    storage.process_request(request)
+    step = storage['step']
+    assert step.data == MultiValueDict({"single": ["value0"],
+                                        "double": ["value1", "value2"]})
+    assert type(step.data) is MultiValueDict
+
+
 cookie = Tests()
 
 
@@ -252,6 +282,31 @@ def should_completely_remove_data_from_cookies_when_deleted():
     response = HttpResponse('')
     storage.process_response(response)
     assert 'namespace|name' not in response.cookies
+
+
+@cookie.test
+def should_store_multi_value_dict_values_as_lists():
+    # Create a request and store a MultiValueDict (what you would expect from
+    # actual POST/FILES data in Django)
+    request, response = factory.get('/'), HttpResponse('')
+    storage = CookieStorage('name', 'namespace')
+    storage.process_request(request)
+    step = storage['step']
+    step.data = MultiValueDict({"single": ["value0"],
+                                "double": ["value1", "value2"]})
+    storage.process_response(response)
+
+    # Retrieve the stored data, and ensure it's still a MultiValueDict
+    request = factory.get('/')
+    request.COOKIES.update(((k, v.value)
+                            for k, v in response.cookies.iteritems()))
+    # Create a fresh storage to load data from the request
+    storage = CookieStorage('name', 'namespace')
+    storage.process_request(request)
+    step = storage['step']
+    assert step.data == MultiValueDict({"single": ["value0"],
+                                        "double": ["value1", "value2"]})
+    assert type(step.data) is MultiValueDict
 
 
 db = Tests()
@@ -348,5 +403,39 @@ def should_completely_remove_data_from_database_when_deleted():
     storage.process_response(HttpResponse(''))
     assert WizardState.objects.filter(name='name', namespace='namespace').count() == 0
     assert request.session['some other data'] == 'testing'
+
+
+@db.test
+def should_store_multi_value_dict_values_as_lists():
+    middleware = SessionMiddleware()
+
+    # Create a request and store a MultiValueDict (what you would expect from
+    # actual POST/FILES data in Django)
+    request, response = factory.get('/'), HttpResponse('')
+    middleware.process_request(request)
+    request.session['foo'] = 'bar'  # trigger session creation
+    session_key = request.session.session_key
+    storage = DatabaseStorage('name', 'namespace')
+    storage.process_request(request)
+    step = storage['step']
+    step.data = MultiValueDict({"single": ["value0"],
+                                "double": ["value1", "value2"]})
+    storage.process_response(response)
+    middleware.process_response(request, response)
+
+    # Retrieve the stored data, and ensure it's still a MultiValueDict
+    request = factory.get('/')
+    request.COOKIES[settings.SESSION_COOKIE_NAME] = session_key
+    request.COOKIES.update(((k, v.value)
+                            for k, v in response.cookies.iteritems()))
+    middleware.process_request(request)
+    # Create a fresh storage to load data from the request
+    storage = DatabaseStorage('name', 'namespace')
+    storage.process_request(request)
+    step = storage['step']
+    assert step.data == MultiValueDict({"single": ["value0"],
+                                        "double": ["value1", "value2"]})
+    assert type(step.data) is MultiValueDict
+
 
 tests = Tests((cookie, core, db, session))
