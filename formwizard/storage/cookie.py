@@ -1,7 +1,6 @@
 from __future__ import absolute_import, unicode_literals
 from django.conf import settings
 from django.core.exceptions import SuspiciousOperation
-from django.utils import simplejson as json
 from django.utils.hashcompat import sha_constructor
 from django.utils.encoding import smart_str
 from formwizard.storage import Storage
@@ -13,8 +12,6 @@ class CookieStorage(Storage):
     A storage that stores form data in a cookie given to the user. Files remain
     stored in the provided file storage.
     """
-    # explicitly specifying the separators removes extraneous JSON whitespace
-    encoder = json.JSONEncoder(separators=(',', ':'))
 
     def __init__(self, *args, **kwargs):
         super(CookieStorage, self).__init__(*args, **kwargs)
@@ -32,7 +29,7 @@ class CookieStorage(Storage):
         self.reset()
         self._delete = True
 
-    def decode(self, data):
+    def decode(self, bytes):
         # check integrity
         hmac, _, payload = data.partition('$')
         if payload:
@@ -44,9 +41,8 @@ class CookieStorage(Storage):
         super(CookieStorage, self).decode(decoded)
 
     def encode(self):
-        data = super(CookieStorage, self).encode()
-        payload = self.encoder.encode(data)
-        return '%s$%s' % (self.hmac(payload), payload)
+        bytes = super(CookieStorage, self).encode()
+        return b'%s$%s' % (self.hmac(bytes), bytes)
 
     def hmac(self, data):
         key = b'%s$%s' % (settings.SECRET_KEY, self.key)

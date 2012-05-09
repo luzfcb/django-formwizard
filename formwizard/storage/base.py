@@ -3,6 +3,7 @@ from django.core.files.uploadedfile import UploadedFile
 from django.template.defaultfilters import slugify
 from django.utils.encoding import smart_str
 from formwizard.storage.exceptions import NoFileStorageConfigured
+from .endecs import PickleEndec
 
 
 class Step(object):
@@ -50,6 +51,7 @@ class Storage(object):
     :type  file_storage: ``django.core.files.Storage`` class
     """
     step_class = Step
+    endec = PickleEndec()
 
     def __init__(self, name, namespace, file_storage=None):
         self.name = name
@@ -185,20 +187,21 @@ class Storage(object):
                 'files': self._encode_files(step.files),
                 'data': step.data,
             }
-        return data
+        return self.endec.encode(data)
 
-    def decode(self, data):
+    def decode(self, bytes_):
         """
         Performs reverse operation to ``encode()``.
         """
-        for name, attrs in data['steps'].iteritems():
+        obj = self.endec.decode(bytes_)
+        for name, attrs in obj['steps'].iteritems():
             self.steps[name] = self.step_class(
                     name, data=attrs['data'],
                     files=self._decode_files(attrs['files']))
         # It's important to set the current step *after* creating all the Step
         # objects, so that ``self.current_step`` refers to an object in
         # ``self.steps``
-        if data['current_step'] is None:
+        if obj['current_step'] is None:
             self.current_step = None
         else:
-            self.current_step = self[data['current_step']]
+            self.current_step = self[obj['current_step']]
