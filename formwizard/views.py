@@ -1,6 +1,6 @@
 from __future__ import absolute_import, unicode_literals
 from django.core.exceptions import ImproperlyConfigured, ValidationError
-from django.core.urlresolvers import reverse, resolve
+from django.core.urlresolvers import reverse, resolve, NoReverseMatch
 from django.forms import FileField
 from django.forms.formsets import BaseFormSet
 from django.forms.models import ModelForm, BaseModelFormSet
@@ -541,8 +541,12 @@ class NamedUrlWizardMixin(WizardMixin):
                         % self.__class__.__name__)
         kwargs = dict(match.kwargs, **kwargs)
         url_name = ':'.join((match.namespaces + [match.url_name]))
-        return reverse(url_name, args=match.args, kwargs=kwargs,
-                       current_app=match.app_name)
+        try:
+            return reverse(url_name, args=match.args, kwargs=kwargs,
+                           current_app=match.app_name)
+        except NoReverseMatch:
+            return reverse(match.func, args=match.args, kwargs=kwargs,
+                           current_app=match.app_name)
 
     def get_storage(self):
         wizard = self
