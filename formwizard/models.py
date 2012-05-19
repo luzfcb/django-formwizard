@@ -1,7 +1,11 @@
 from __future__ import absolute_import, unicode_literals
-from datetime import datetime
 from django.core.exceptions import ValidationError
 from django.db import models
+try:
+    from django.utils.timezone import now
+except ImportError:
+    from datetime import datetime
+    now = datetime.now
 
 
 class WizardState(models.Model):
@@ -17,7 +21,7 @@ class WizardState(models.Model):
     session_key = models.CharField(max_length=40, blank=True)
     user = models.ForeignKey('auth.User', blank=True, null=True)
     data = models.TextField(default='{"current_step":null,"steps":{}}')
-    created_at = models.DateTimeField(default=datetime.now)
+    created_at = models.DateTimeField(default=now)
     modified_at = models.DateTimeField(auto_now=True)
 
     class Meta:

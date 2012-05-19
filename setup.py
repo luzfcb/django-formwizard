@@ -9,13 +9,11 @@ setup(
     author='Bradley Ayers',
     author_email='bradley.ayers@gmail.com',
     url='http://github.com/bradleyayers/django-formwizard/',
-    packages=find_packages(exclude=['tests', 'tests.*',
-                                    'test_project', 'test_project.*']),
+    packages=find_packages(exclude=['tests', 'tests.*']),
     include_package_data=True,  # declarations in MANIFEST.in
 
-    install_requires=['Django >=1.3'],
-    tests_require=['Django >=1.3', 'Attest >=0.5.3', 'django-attest >=0.2.2',
-                   'unittest-xml-reporting', 'pylint'],
+    install_requires=['Django >=1.3', 'django-attest >=0.3.0'],
+    tests_require=['unittest-xml-reporting'],
 
     test_loader='tests:loader',
     test_suite='tests.everything',

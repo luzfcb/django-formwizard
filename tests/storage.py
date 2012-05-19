@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, unicode_literals
-from attest import assert_hook, Assert, Tests
+from attest import assert_hook, Assert, Tests  # pylint: ignore=W0611
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured, SuspiciousOperation
 from django.core.files.storage import FileSystemStorage
@@ -85,8 +85,8 @@ def should_encode_and_decode_properly(temp):
     restored.decode(storage.encode())
     assert storage.encode() == restored.encode()
 
-    with open(__file__, 'rb') as f:
-        expected = f.read()
+    with open(__file__, 'rb') as handle:
+        expected = handle.read()
 
     step = storage['step1']
     step.files = {'file1': InMemoryUploadedFile(file=open(__file__, 'rb'),
@@ -126,6 +126,7 @@ def should_raise_exception_if_session_middleware_not_used():
         name = forms.CharField()
 
     class StepsWizardView(WizardView):
+        # pylint: ignore=W0223
         storage = 'formwizard.storage.SessionStorage'
         steps = (
             ("Step 1", Step1),
@@ -329,23 +330,23 @@ def should_completely_remove_data_from_database_when_deleted():
     # all lazy), so we'll set some test data initially that we can then use
     # later.
     request.session['some other data'] = 'testing'
-    session_key = request.session.session_key  # save for later request
     storage = DatabaseStorage('name', 'namespace')
     storage.process_request(request)
     step = storage['step1']
     step.data = {'blarg': 'bloog'}
     storage.process_response(response)
     middleware.process_response(request, response)
+    session_key = request.session.session_key  # save for later request
     assert WizardState.objects.filter(name='name', namespace='namespace').count() == 1
 
     # check deletion
     request = factory.get('/')
-    request.COOKIES[settings.SESSION_COOKIE_NAME] = session_key # use session
+    request.COOKIES[settings.SESSION_COOKIE_NAME] = session_key  # use session
     middleware.process_request(request)
     storage = DatabaseStorage('name', 'namespace')
     storage.process_request(request)
     storage.delete()
-    storage.process_response(HttpResponse(''))
+    #storage.process_response(HttpResponse(''))
     assert WizardState.objects.filter(name='name', namespace='namespace').count() == 0
     assert request.session['some other data'] == 'testing'
 

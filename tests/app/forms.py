@@ -14,7 +14,9 @@ class Comment(forms.Form):
     name = forms.CharField(max_length=100)
     message = forms.CharField(max_length=200)
 
-Page1Comments = formset_factory(Comment, extra=2)
+
+Page1Comments = formset_factory(Comment, extra=2)  # pylint: ignore=C0103
+
 
 class Page2(forms.Form):
     address1 = forms.CharField(max_length=100)
@@ -26,7 +28,7 @@ class Page3(forms.Form):
     random_crap = forms.CharField(max_length=100)
 
 
-Page4 = formset_factory(Page3, extra=2)
+Page4 = formset_factory(Page3, extra=2)  # pylint: ignore=C0103
 
 
 class PersonForm(forms.ModelForm):

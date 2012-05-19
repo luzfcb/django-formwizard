@@ -4,7 +4,6 @@ from attest import Tests, TestBase, test
 from contextlib import contextmanager
 from django.contrib.auth.models import User
 from django.core.urlresolvers import reverse
-from django.forms.formsets import BaseFormSet
 from django.http import QueryDict
 from django_attest import TestContext
 
@@ -94,9 +93,9 @@ class NamedUrlWizardTests(TestBase):
     def posting_invalid_form_data_should_render_errors(self):
         # create new data using 'current step'
         data = {}
-        for k, v in self.datas[0].iteritems():
-            if k.startswith('mgmt-') or k.endswith('_FORMS'):
-                data[k] = v
+        for key, value in self.datas[0].iteritems():
+            if key.startswith('mgmt-') or key.endswith('_FORMS'):
+                data[key] = value
         url = reverse(self.url_name, kwargs={'slug': 'step-1'})
         response = self.client.post(url, data)
 

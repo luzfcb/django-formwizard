@@ -15,7 +15,6 @@ from formwizard.storage import get_storage, Step
 from formwizard.storage.exceptions import NoFileStorageConfigured
 from formwizard.forms import ManagementForm
 import operator
-import re
 
 
 class Wizard(object):
@@ -163,7 +162,7 @@ class WizardMixin(object):
         return '<%s: forms: %s>' % (self.__class__.__name__, self.forms)
 
     @classonlymethod
-    def as_view(cls, steps=None, *args, **kwargs):
+    def as_view(cls, steps=None, *args, **kwargs):  # pylint: ignore=E0213
         steps = steps or cls.steps
 
         # validation
@@ -363,11 +362,11 @@ class WizardMixin(object):
         """
         forms = []
         kwargss = self.get_forms_kwargs(step)
-        for form_kwargs, form in zip(kwargss, step.forms):
+        for form_kwargs, Form in zip(kwargss, step.forms):  # pylint: ignore=C0103
             form_kwargs.update(kwargs)
-            f = form(**form_kwargs)
-            f.is_valid()  # trigger validation
-            forms.append(f)
+            form = Form(**form_kwargs)
+            form.is_valid()  # trigger validation
+            forms.append(form)
         return forms
 
     def get_context_data(self, forms, **kwargs):
@@ -425,7 +424,6 @@ class WizardMixin(object):
         raise NotImplementedError("Your %s class has not defined a done() "
             "method, which is required." % self.__class__.__name__)
 
-
     def render(self, forms=None):
         """
         Returns a ``HttpResponse`` containing a all needed context data.
@@ -478,14 +476,14 @@ class WizardMixin(object):
         return self.render()
 
 
-class WizardView(WizardMixin, TemplateView):
+class WizardView(WizardMixin, TemplateView):  # pylint: ignore=W0223
     """
     A view premixed with ``WizardMixin`` and ``TemplateView``. To use this a
     *storage* must be specified.
     """
 
 
-class NamedUrlWizardMixin(WizardMixin):
+class NamedUrlWizardMixin(WizardMixin):  # pylint: ignore=W0223
     """
     A WizardView with URL named steps support.
     """
@@ -605,7 +603,7 @@ class NamedUrlWizardMixin(WizardMixin):
         return redirect(step.url)
 
 
-class NamedUrlWizardView(NamedUrlWizardMixin, TemplateView):
+class NamedUrlWizardView(NamedUrlWizardMixin, TemplateView):  # pylint: ignore=W0223
     """
     A view premixed with ``NamedUrlWizardMixin`` and ``TemplateView``. To use
     this a *storage* must be specified.

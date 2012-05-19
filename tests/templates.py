@@ -1,11 +1,15 @@
-from attest import assert_hook, Tests
-from django.conf.urls.defaults import patterns
+from .app.forms import Page1
+from attest import assert_hook, Tests  # pylint: ignore=W0611
+try:
+    from django.conf.urls import patterns
+except ImportError:
+    from django.conf.urls.defaults import patterns
 from django_attest import TestContext
 from formwizard.views import WizardView
-from .app.forms import Page1
 
 
 class TestWizard(WizardView):
+    # pylint: ignore=W0223
     storage = "formwizard.storage.CookieStorage"
     steps = (
         ("Page 1", Page1),

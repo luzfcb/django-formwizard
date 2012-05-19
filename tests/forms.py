@@ -1,23 +1,11 @@
 from __future__ import absolute_import, unicode_literals
-from attest import assert_hook, Assert, Tests
+from attest import assert_hook, Assert, Tests  # pylint: disable=W0611
 from django import forms
-from django.http import HttpRequest
-from django.conf import settings
-from django.contrib.auth.models import User
-from django.contrib.sessions.middleware import SessionMiddleware
 from django.core.exceptions import ValidationError
 from django.forms.formsets import formset_factory, BaseFormSet
-from django.forms.models import modelformset_factory
-from django.db import models
-from django.db.models.query import QuerySet
-from django.test import TestCase
 from django.test.client import RequestFactory
-from django.template.response import TemplateResponse
-from django.utils.importlib import import_module
-from django.views.generic.base import TemplateView
 from django.utils.datastructures import SortedDict
 from formwizard.views import WizardView
-from .app.models import Person
 
 
 factory = RequestFactory()
@@ -65,6 +53,7 @@ class DispatchHookMixin(object):
 @as_view.test
 def should_preserve_named_forms():
     class TestWizardView(DispatchHookMixin, WizardView):
+        # pylint: ignore=W0223
         storage = 'formwizard.storage.dummy.DummyStorage'
         template_name = 'simple.html'
         steps = (
@@ -87,6 +76,7 @@ steps = Tests()
 @steps.test
 def by_default_the_first_form_should_be_the_current_step():
     class TestWizardView(DispatchHookMixin, WizardView):
+        # pylint: ignore=W0223
         storage = 'formwizard.storage.dummy.DummyStorage'
         template_name = 'simple.html'
         steps = (
@@ -102,6 +92,7 @@ def by_default_the_first_form_should_be_the_current_step():
 @steps.test
 def current_step_should_be_persisted_in_backend():
     class TestWizardView(DispatchHookMixin, WizardView):
+        # pylint: ignore=W0223
         storage = 'formwizard.storage.dummy.DummyStorage'
         template_name = 'simple.html'
         steps = (
@@ -123,6 +114,7 @@ def current_step_should_be_persisted_in_backend():
 @steps.test
 def done_raises_exception_unless_implemented():
     class TestWizardView(DispatchHookMixin, WizardView):
+        # pylint: ignore=W0223
         storage = 'formwizard.storage.dummy.DummyStorage'
         template_name = 'simple.html'
         steps = (
@@ -139,6 +131,7 @@ def done_raises_exception_unless_implemented():
 @steps.test
 def render_done_performs_validation():
     class TestWizardView(DispatchHookMixin, WizardView):
+        # pylint: ignore=W0223
         storage = 'formwizard.storage.dummy.DummyStorage'
         template_name = 'simple.html'
         steps = (
@@ -155,6 +148,7 @@ def render_done_performs_validation():
 @steps.test
 def steps_manager_always_populates_step_forms():
     class TestWizardView(DispatchHookMixin, WizardView):
+        # pylint: ignore=W0223
         storage = 'formwizard.storage.dummy.DummyStorage'
         template_name = 'simple.html'
         steps = (
@@ -184,9 +178,10 @@ formsets = Tests()
 
 @formsets.test
 def should_honor_extra_forms_correctly():
-    Step1Formset = formset_factory(Step1, extra=3)
+    Step1Formset = formset_factory(Step1, extra=3)  # pylint: ignore=C0103
 
     class TestWizardView(DispatchHookMixin, WizardView):
+        # pylint: ignore=W0223
         storage = 'formwizard.storage.dummy.DummyStorage'
         template_name = 'simple.html'
         steps = (
@@ -220,9 +215,10 @@ def formsets_should_be_validated():
         def clean(self):
             raise ValidationError("Expected error")
 
-    Step1BorkedFormset = formset_factory(Step1, BorkedFormset)
+    Step1BorkedFormset = formset_factory(Step1, BorkedFormset)  # pylint: ignore=C0103
 
     class TestWizardView(DispatchHookMixin, WizardView):
+        # pylint: ignore=W0223
         storage = 'formwizard.storage.dummy.DummyStorage'
         template_name = 'simple.html'
         steps = (
@@ -252,6 +248,7 @@ media = Tests()
 @media.test
 def wizard_object_in_template_should_contain_media():
     class TestWizardView(DispatchHookMixin, WizardView):
+        # pylint: ignore=W0223
         storage = 'formwizard.storage.dummy.DummyStorage'
         template_name = 'simple.html'
         steps = (
@@ -268,6 +265,7 @@ def wizard_object_in_template_should_contain_media():
 
     # test combined media
     class TestWizardView(DispatchHookMixin, WizardView):
+        # pylint: ignore=W0223
         storage = 'formwizard.storage.dummy.DummyStorage'
         template_name = 'simple.html'
         steps = (

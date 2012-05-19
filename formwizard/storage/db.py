@@ -1,8 +1,8 @@
 from __future__ import absolute_import, unicode_literals
 from django.core.exceptions import ImproperlyConfigured
-from django.utils import simplejson as json
 from formwizard.storage import Storage
 from formwizard.models import WizardState
+import json
 
 
 class DatabaseStorage(Storage):
@@ -25,7 +25,13 @@ class DatabaseStorage(Storage):
             if not hasattr(request, 'session'):
                 raise ImproperlyConfigured(
                         '%s requires that the sessions middleware is enabled.'
-                        % self.__class__.__name__)
+                        % type(self).__name__)
+            if not request.session.session_key:
+                # Starting in Django 1.4, the session_key isn't determined
+                # until the first response is handled by the middleware.
+                # We get around this by manually saving the session to trigger
+                # the creation of session_key
+                request.session.save()
             kwargs['session_key'] = request.session.session_key
         self._state, created = WizardState.objects.get_or_create(**kwargs)
         self.decode(self._state.data)

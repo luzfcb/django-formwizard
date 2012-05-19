@@ -1,11 +1,10 @@
 from __future__ import absolute_import, unicode_literals
 from django.conf import settings
 from django.core.exceptions import SuspiciousOperation
-from django.utils import simplejson as json
-from django.utils.hashcompat import sha_constructor
-from django.utils.encoding import smart_str
 from formwizard.storage import Storage
+import hashlib
 import hmac
+import json
 
 
 class CookieStorage(Storage):
@@ -51,4 +50,4 @@ class CookieStorage(Storage):
     def hmac(self, data):
         key = b'%s$%s' % (settings.SECRET_KEY, self.key)
         msg = data.encode('utf-8')
-        return hmac.new(key, msg, sha_constructor).hexdigest()
+        return hmac.new(key, msg, hashlib.sha1).hexdigest()

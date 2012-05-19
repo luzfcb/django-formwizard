@@ -8,8 +8,7 @@ from django.core.urlresolvers import reverse
 from django.test.client import RequestFactory
 from django_attest import TestContext
 from formwizard.views import WizardView
-from .app.forms import Page1, PersonForm
-from .app.models import Person
+from .app.forms import Page1
 
 
 class WizardTests(TestBase):
@@ -82,9 +81,9 @@ class WizardTests(TestBase):
     def posting_incomplete_data_should_return_form_errors(self):
         # create new data using 'current step'
         data = {}
-        for k, v in self.datas[0].iteritems():
-            if k.startswith('mgmt-') or k.endswith('_FORMS'):
-                data[k] = v
+        for key, value in self.datas[0].iteritems():
+            if key.startswith('mgmt-') or key.endswith('_FORMS'):
+                data[key] = value
         response = self.client.post(self.url, data)
         assert response.status_code == 200
         assert response.context['wizard'].steps.current.name == 'Step 1'
@@ -154,8 +153,10 @@ class WizardTests(TestBase):
         assert response.status_code == 200
 
         forms = response.context['forms']
-        with open(__file__, 'rb') as f:
-            assert forms['Step 2'][0].cleaned_data['file1'].read() == f.read()
+        with open(__file__, 'rb') as handle:
+            expected = forms['Step 2'][0].cleaned_data['file1'].read()
+            actual = handle.read()
+            assert expected == actual
 
         cleaned_datas = []
         for fs in forms.itervalues():
@@ -253,7 +254,7 @@ tests = Tests([SessionTests(), CookieTests()])
 
 @tests.test
 def missing_storage_class_should_raise_improperly_configured():
-    class TestWizard(WizardView):
+    class TestWizard(WizardView):  # pylint: ignore=W0223
         steps = (
             ("Page 1", Page1),
         )
