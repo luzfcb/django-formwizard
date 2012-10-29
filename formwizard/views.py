@@ -2,8 +2,6 @@ from __future__ import absolute_import, unicode_literals
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.core.urlresolvers import reverse, resolve, NoReverseMatch
 from django.forms import FileField
-from django.forms.formsets import BaseFormSet
-from django.forms.models import ModelForm, BaseModelFormSet
 from django.http import Http404
 from django.shortcuts import redirect
 from django.template.loader import get_template
@@ -184,7 +182,7 @@ class WizardMixin(object):
         if not cls.file_storage:
             for forms in (form for form in forms_dict.itervalues()):
                 for form in forms:
-                    if issubclass(form, BaseFormSet):
+                    if hasattr(form, "form"):  # formset
                         form = form.form
                     for field in form.base_fields.itervalues():
                         if isinstance(field, FileField):
@@ -346,10 +344,11 @@ class WizardMixin(object):
                 'prefix': 'form-%s' % i,
                 'initial': initials[i],
             }
-            if issubclass(form, ModelForm):
+            if hasattr(form, "_meta") and hasattr(form._meta, "model"):
                 # If the form is based on ModelForm, add instance if available.
                 kwargs['instance'] = instances[i]
-            elif issubclass(form, BaseModelFormSet):
+            elif (hasattr(form, "form") and hasattr(form.form, "_meta")
+                  and hasattr(form.form, "model")):
                 # If the form is based on ModelFormSet, add queryset if
                 # available.
                 kwargs['queryset'] = instances[i]
@@ -576,7 +575,7 @@ class NamedUrlWizardMixin(WizardMixin):  # pylint: ignore=W0223
                 # data is missing or has been tampered with" error
                 validated_step_forms = self.get_validated_step_forms(step, data=None)  # cache
                 for i, form in enumerate(step.forms):
-                    if issubclass(form, BaseFormSet):
+                    if hasattr(form, "form"):  # formset
                         management_form = validated_step_forms[i].management_form
                         for key, value in management_form.initial.iteritems():
                             step.data[management_form.add_prefix(key)] = value
