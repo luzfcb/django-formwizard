@@ -38,3 +38,13 @@ The source is available on
 
 If you are interested in contributing, just fork the repository on GitHub and
 commit your changes. Don't forget to send a pull request.
+
+
+Changes
+=======
+
+v1.3.10
+-------
+
+- Use ``hasattr`` rather than ``isinstance`` or ``issubclass`` to check if
+  something is a model form or formset.

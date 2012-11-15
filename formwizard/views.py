@@ -348,7 +348,7 @@ class WizardMixin(object):
                 # If the form is based on ModelForm, add instance if available.
                 kwargs['instance'] = instances[i]
             elif (hasattr(form, "form") and hasattr(form.form, "_meta")
-                  and hasattr(form.form, "model")):
+                  and hasattr(form.form._meta, "model")):
                 # If the form is based on ModelFormSet, add queryset if
                 # available.
                 kwargs['queryset'] = instances[i]
